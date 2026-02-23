@@ -1,0 +1,28 @@
+/*
+TIL (2026-02-23): nullish coalescing (??) vs logical OR (||) and optional chaining (?.)
+- ?? treats only null and undefined as "missing" values.
+- || treats falsy values (0, "", false, null, undefined, NaN) as "missing".
+- ?. safely accesses deeply nested properties or calls when a value may be null/undefined.
+*/
+
+const examples = (() => {
+  const zero = 0;
+  const empty = '';
+  const nil = null;
+
+  console.log('zero ?? 42 ->', zero ?? 42);    // 0
+  console.log('zero || 42 ->', zero || 42);    // 42
+
+  console.log("empty ?? 'fallback' ->", empty ?? 'fallback'); // ''
+  console.log("empty || 'fallback' ->", empty || 'fallback'); // 'fallback'
+
+  // optional chaining: avoids TypeError when accessing deep paths
+  const user = { profile: { name: 'Ava' }, getId: () => 7 };
+  const missing = null;
+  console.log('user?.profile?.name ->', user?.profile?.name); // 'Ava'
+  console.log('missing?.profile?.name ->', missing?.profile?.name); // undefined
+
+  // safe call with optional chaining
+  console.log('user.getId?.() ->', user.getId?.()); // 7
+  console.log('missing.getId?.() ->', missing?.getId?.()); // undefined
+})();
