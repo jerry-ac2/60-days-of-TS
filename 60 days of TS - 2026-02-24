@@ -1,0 +1,37 @@
+/**
+ * Run async tasks over an array with limited concurrency while preserving result order.
+ *
+ * @template T - item type
+ * @template R - result type
+ * @param items - array of inputs
+ * @param worker - async function applied to each item
+ * @param concurrency - max number of concurrent workers (>=1)
+ * @returns Promise resolving to array of results in the same order as items
+ *
+ * Example:
+ *   const urls = ['a','b','c'];
+ *   const results = await asyncPool(urls, async u => fetch(u).then(r=>r.text()), 2);
+ */
+export async function asyncPool<T, R>(
+  items: T[],
+  worker: (item: T) => Promise<R>,
+  concurrency: number
+): Promise<R[]> {
+  const n = items.length;
+  if (n === 0) return [];
+  const limit = Math.max(1, Math.floor(concurrency) || 1);
+  const results = new Array<R>(n);
+  let nextIndex = 0;
+
+  async function runner() {
+    while (true) {
+      const i = nextIndex++;
+      if (i >= n) return;
+      results[i] = await worker(items[i]);
+    }
+  }
+
+  const runners = Array.from({ length: Math.min(limit, n) }, () => runner());
+  await Promise.all(runners);
+  return results;
+}
