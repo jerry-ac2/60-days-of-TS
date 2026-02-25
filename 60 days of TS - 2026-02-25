@@ -1,0 +1,26 @@
+```ts
+/**
+ * 2026-02-25 — TIL: Use structuredClone for deep cloning when available.
+ *
+ * deepClone(value):
+ * - Uses global structuredClone if present (fast, preserves most built-ins:
+ *   Date, Map, Set, ArrayBuffer, TypedArrays, BigInt, RegExp, etc.).
+ * - Falls back to JSON roundtrip (lossy: drops functions, undefined, symbols,
+ *   RegExp/Map/Set/BigInt become strings or are lost).
+ *
+ * Caveat: structuredClone throws on some host objects (e.g. certain DOM nodes).
+ */
+export function deepClone<T>(value: T): T {
+  const sc = (globalThis as any).structuredClone
+  if (typeof sc === "function") return sc(value) as T
+  // Fallback for older runtimes — acceptable for plain data objects only
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+/* Example */
+if (import.meta?.url !== undefined) {
+  const orig = { d: new Date(), arr: [1, 2, { x: 3 }] }
+  const copy = deepClone(orig)
+  console.log(orig, copy)
+}
+```
