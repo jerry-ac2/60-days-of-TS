@@ -1,0 +1,35 @@
+/**
+ * asyncPool - run async tasks with concurrency limit
+ *
+ * @param poolLimit - max concurrent promises (>0)
+ * @param array - input items
+ * @param iteratorFn - async function(item, index) => result
+ * @returns Promise of results in the same order as input
+ *
+ * Example:
+ *   await asyncPool(3, urls, async (url) => fetch(url).then(r => r.text()));
+ */
+export async function asyncPool<T, R>(
+  poolLimit: number,
+  array: T[],
+  iteratorFn: (item: T, index: number) => Promise<R> | R
+): Promise<R[]> {
+  if (poolLimit < 1) throw new Error('poolLimit must be >= 1');
+  const results: R[] = new Array(array.length);
+  let i = 0;
+  async function worker() {
+    while (true) {
+      const current = i++;
+      if (current >= array.length) return;
+      try {
+        results[current] = await iteratorFn(array[current], current);
+      } catch (err) {
+        // bubble error to stop all processing
+        throw err;
+      }
+    }
+  }
+  const workers = Array.from({ length: Math.min(poolLimit, array.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
