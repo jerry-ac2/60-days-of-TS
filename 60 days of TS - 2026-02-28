@@ -1,0 +1,27 @@
+/**
+ * groupBy - Group array items by a key or selector function.
+ *
+ * @example
+ * groupBy([{a:1},{a:2},{a:1}], 'a') // Map {1 => [{a:1},{a:1}], 2 => [{a:2}]}
+ * groupBy(['apple','banana','avocado'], s => s[0]) // Map {'a' => ['apple','avocado'], 'b' => ['banana']}
+ *
+ * @param arr - input array (readonly allowed)
+ * @param keyFn - either a property name (keyof T) or a function returning the group key
+ * @returns Map where each key maps to an array of items that belong to that group
+ */
+export function groupBy<T, K = string>(
+  arr: readonly T[],
+  keyFn: ((item: T) => K) | keyof T
+): Map<K, T[]> {
+  const map = new Map<K, T[]>();
+  const selector = typeof keyFn === 'function'
+    ? (keyFn as (item: T) => K)
+    : ((item: T) => (item as any)[keyFn as keyof T] as K);
+  for (const item of arr) {
+    const k = selector(item);
+    const bucket = map.get(k);
+    if (bucket) bucket.push(item);
+    else map.set(k, [item]);
+  }
+  return map;
+}
