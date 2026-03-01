@@ -1,0 +1,26 @@
+# Today I Learned — Intl.ListFormat (2026-03-01)
+
+Intl.ListFormat provides locale-aware, human-friendly joins (e.g. "a, b, and c").
+Useful for UI labels, accessibility, and proper punctuation across locales.
+
+Example:
+```js
+const items = ['apples', 'oranges', 'bananas'];
+// English, long (adds Oxford comma)
+new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(items);
+// -> "apples, oranges, and bananas"
+// Short style (compact)
+new Intl.ListFormat('en', { style: 'short', type: 'conjunction' }).format(items);
+// -> "apples, oranges & bananas"
+// Disjunction (uses "or")
+new Intl.ListFormat('en', { type: 'disjunction' }).format(['a', 'b']);
+// -> "a or b"
+// Fallback to simple join if not supported
+const formatList = (list, opts = {}) =>
+  (typeof Intl !== 'undefined' && Intl.ListFormat
+    ? new Intl.ListFormat(typeof navigator !== 'undefined' ? navigator.language : 'en', opts).format(list)
+    : list.join(', '));
+console.log(formatList(items, { style: 'long', type: 'conjunction' }));
+```
+
+Tip: Pass the user's locale (e.g., navigator.language) to respect local grammar and conjunction words.
