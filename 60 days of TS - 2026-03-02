@@ -1,0 +1,25 @@
+/**
+ * TIL 2026-03-02: Get the index + value of the first fulfilled Promise using Promise.any
+ *
+ * Approach: wrap each promise so a fulfillment becomes { index, value }.
+ * Promise.any chooses the first fulfillment; if all reject it throws AggregateError.
+ */
+
+const firstFulfilled = async (promises) => {
+  const wrapped = promises.map((p, i) => Promise.resolve(p).then(v => ({ i, v })));
+  return Promise.any(wrapped); // resolves to { i, v } or rejects with AggregateError
+};
+
+// Example usage
+(async () => {
+  const p1 = new Promise((_, r) => setTimeout(() => r('err1'), 100));
+  const p2 = new Promise(resolve => setTimeout(() => resolve('ok2'), 200));
+  const p3 = new Promise(resolve => setTimeout(() => resolve('ok3'), 150));
+
+  try {
+    const { i, v } = await firstFulfilled([p1, p2, p3]);
+    console.log(i, v); // -> 2 'ok3' (p3 fulfilled first)
+  } catch (e) {
+    console.error('all promises rejected', e);
+  }
+})();
