@@ -1,0 +1,43 @@
+/**
+ * 2026-03-03 — deepMerge.ts
+ *
+ * Recursively merges two values:
+ * - Plain objects are merged key-by-key (recursive).
+ * - Arrays are concatenated.
+ * - Primitives/other types are replaced by the second value.
+ *
+ * Type: deepMerge<T, U>(a: T, b: U) => T & U
+ *
+ * Example:
+ *  const a = { x: 1, nested: { a: [1], b: 2 } };
+ *  const b = { y: 2, nested: { a: [2], c: 3 } };
+ *  deepMerge(a, b);
+ *  // => { x:1, y:2, nested: { a: [1,2], b:2, c:3 } }
+ */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return Boolean(v && typeof v === 'object' && !Array.isArray(v) && Object.prototype.toString.call(v) === '[object Object]');
+}
+
+export function deepMerge<T, U>(a: T, b: U): T & U {
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const res: Record<string, unknown> = { ...(a as Record<string, unknown>) };
+    for (const k of Object.keys(b)) {
+      const av = (a as any)[k];
+      const bv = (b as any)[k];
+      if (isPlainObject(av) && isPlainObject(bv)) {
+        res[k] = deepMerge(av, bv);
+      } else if (Array.isArray(av) && Array.isArray(bv)) {
+        res[k] = av.concat(bv);
+      } else {
+        res[k] = bv;
+      }
+    }
+    return res as T & U;
+  }
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return (a.concat(b) as unknown) as T & U;
+  }
+
+  return b as unknown as T & U;
+}
