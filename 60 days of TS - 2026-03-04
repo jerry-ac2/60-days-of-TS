@@ -1,0 +1,42 @@
+/**
+ * Memoize a function with optional LRU size and max-age (ms).
+ *
+ * - Uses JSON.stringify(args) as cache key (falls back to join on failure).
+ * - Stores Promise results transparently, so async functions are supported.
+ * - Evicts least-recently-used entry when maxSize is exceeded.
+ *
+ * Limitations: keys for non-serializable/circular args may collide; adjust keyFn for strict needs.
+ */
+export function memoize<T extends (...args: any[]) => any>(
+  fn: T,
+  options?: { maxSize?: number; maxAgeMs?: number }
+): T {
+  const cache = new Map<string, { value: ReturnType<T>; ts: number }>()
+  const { maxSize = Infinity, maxAgeMs } = options ?? {}
+  const keyFn = (args: any[]) => {
+    try { return JSON.stringify(args) } catch { return args.join('|') }
+  }
+  const wrapped = function (this: any, ...args: any[]) {
+    const key = keyFn(args)
+    const now = Date.now()
+    const hit = cache.get(key)
+    if (hit) {
+      if (maxAgeMs && now - hit.ts > maxAgeMs) {
+        cache.delete(key)
+      } else {
+        // refresh LRU position
+        cache.delete(key)
+        cache.set(key, hit)
+        return hit.value
+      }
+    }
+    const value = fn.apply(this, args)
+    cache.set(key, { value: value as ReturnType<T>, ts: now })
+    if (cache.size > maxSize) {
+      const firstKey = cache.keys().next().value
+      if (firstKey !== undefined) cache.delete(firstKey)
+    }
+    return value
+  }
+  return wrapped as unknown as T
+}
