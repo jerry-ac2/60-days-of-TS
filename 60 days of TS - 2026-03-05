@@ -1,0 +1,60 @@
+/**
+ * promisePool - run async tasks with limited concurrency, preserving input order.
+ *
+ * @template T,R
+ * @param items - array of inputs
+ * @param worker - async function receiving (item, index) and returning a result
+ * @param concurrency - max number of concurrent worker executions (default 4)
+ * @returns Promise resolving to results[] in the same order as items
+ *
+ * Example:
+ *   await promisePool(urls, async (url) => fetch(url).then(r=>r.text()), 3)
+ */
+export async function promisePool<T, R>(
+  items: T[],
+  worker: (item: T, index: number) => Promise<R>,
+  concurrency = 4
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const results: R[] = Array(items.length);
+  let nextIndex = 0;
+  let active = 0;
+  let finished = 0;
+  let rejectOuter: (e: any) => void;
+  const outer = new Promise<R[]>((res, rej) => (rejectOuter = rej));
+  const tryStart = () => {
+    if (finished === items.length) {
+      outerResolve();
+      return;
+    }
+    while (active < concurrency && nextIndex < items.length) {
+      const i = nextIndex++;
+      active++;
+      worker(items[i], i)
+        .then((r) => {
+          results[i] = r;
+          active--;
+          finished++;
+          tryStart();
+        })
+        .catch((e) => {
+          rejectOuter(e);
+        });
+    }
+  };
+  let outerResolved = false;
+  const outerResolve = () => {
+    if (!outerResolved) {
+      outerResolved = true;
+      // @ts-ignore resolve by returning results
+      (outer as any).resolve?.(results);
+    }
+  };
+  // workaround to be able to resolve outer from outerResolve
+  const final = new Promise<R[]>((res) => {
+    // attach resolve to outer so outerResolve can call it
+    (outer as any).resolve = res;
+  });
+  tryStart();
+  return Promise.race([outer, final]) as Promise<R[]>;
+}
