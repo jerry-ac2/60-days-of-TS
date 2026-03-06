@@ -1,0 +1,64 @@
+/**
+ * Debounce a function, preserving `this` and types.
+ *
+ * Usage:
+ *   const debounced = debounce(fn, 200, { immediate: false });
+ *   debounced(arg1, arg2);
+ *   debounced.cancel();
+ *   debounced.flush(); // invoke pending call immediately
+ *
+ * Returns a function with `.cancel()` and `.flush()` helpers.
+ *
+ * Date: 2026-03-06
+ */
+export function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  wait = 0,
+  options: { immediate?: boolean } = {}
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  let lastThis: any = null;
+  let result: ReturnType<T> | undefined;
+  const { immediate = false } = options;
+
+  function invoke() {
+    if (!lastArgs) return;
+    result = fn.apply(lastThis, lastArgs);
+    lastArgs = lastThis = null;
+  }
+
+  function wrapped(this: any, ...args: Parameters<T>) {
+    lastArgs = args;
+    lastThis = this;
+    if (timer) clearTimeout(timer);
+
+    if (immediate && !timer) {
+      result = fn.apply(lastThis, lastArgs);
+      lastArgs = lastThis = null;
+    } else {
+      timer = setTimeout(() => {
+        timer = null;
+        invoke();
+      }, wait);
+    }
+    return result;
+  }
+
+  wrapped.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    lastArgs = lastThis = null;
+  };
+
+  wrapped.flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+      invoke();
+    }
+    return result;
+  };
+
+  return wrapped as typeof wrapped & { cancel(): void; flush(): ReturnType<T> | undefined };
+}
