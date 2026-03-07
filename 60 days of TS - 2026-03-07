@@ -1,0 +1,33 @@
+/**
+ * 2026-03-07 — asyncPool: run async tasks with concurrency limit, preserving order.
+ *
+ * @param limit max concurrent tasks (>=1)
+ * @param items iterable of inputs
+ * @param iteratorFn async function(item, index) => result
+ * @returns Promise resolving to array of results in original order
+ */
+export async function asyncPool<T, R>(
+  limit: number,
+  items: Iterable<T>,
+  iteratorFn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (limit <= 0) limit = 1;
+  const results: R[] = [];
+  const pool: Promise<void>[] = [];
+  let index = 0;
+  for (const item of items) {
+    const idx = index++;
+    let wrapped: Promise<void>;
+    const p = (async () => {
+      results[idx] = await iteratorFn(item, idx);
+    })();
+    wrapped = p.then(() => {
+      const i = pool.indexOf(wrapped);
+      if (i >= 0) pool.splice(i, 1);
+    });
+    pool.push(wrapped);
+    if (pool.length >= limit) await Promise.race(pool);
+  }
+  await Promise.all(pool);
+  return results;
+}
