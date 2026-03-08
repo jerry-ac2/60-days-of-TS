@@ -1,0 +1,22 @@
+# 2026-03-08 — Today I Learned: Object.hasOwn over hasOwnProperty
+
+- Use Object.hasOwn(obj, prop) to check own properties safely and succinctly.
+- It's safer than obj.hasOwnProperty(prop) when obj may be null or have a null prototype.
+
+```js
+// Preferred (modern, clear)
+const obj = Object.create(null);
+obj.foo = 1;
+console.log(Object.hasOwn(obj, 'foo')); // true
+console.log(Object.hasOwn(obj, 'toString')); // false
+
+// Safe polyfill/fallback for older environments
+const hasOwn = Object.hasOwn ?? ((o, p) =>
+  Object.prototype.hasOwnProperty.call(o, p)
+);
+
+// Usage works even if obj has no prototype
+console.log(hasOwn(obj, 'foo')); // true
+```
+
+- Small takeaway: prefer Object.hasOwn for readability and robustness when checking own properties.
