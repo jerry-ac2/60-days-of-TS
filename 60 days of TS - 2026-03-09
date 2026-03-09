@@ -1,0 +1,76 @@
+// 2026-03-09 — debounce utility
+/**
+ * debounce(func, wait, {leading?, trailing?})
+ *
+ * Returns a debounced function with .cancel() and .flush() methods.
+ * - leading: invoke on the leading edge (default: false)
+ * - trailing: invoke on the trailing edge (default: true)
+ *
+ * Example:
+ *   const f = debounce(x => console.log(x), 200, { leading: true });
+ *   f(1); f(2); // may log 1 immediately, ignore 2 until 200ms passed
+ */
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait = 0,
+  opts?: { leading?: boolean; trailing?: boolean }
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  let lastThis: any = null;
+  let result: ReturnType<T> | void;
+  const leading = !!opts?.leading;
+  const trailing = opts?.trailing !== false;
+
+  const invoke = () => {
+    if (!lastArgs) return;
+    result = func.apply(lastThis, lastArgs);
+    lastArgs = lastThis = null;
+    return result;
+  };
+
+  const startTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      if (trailing && lastArgs) invoke();
+    }, wait);
+  };
+
+  const debounced = function (this: any, ...args: Parameters<T>) {
+    lastArgs = args;
+    lastThis = this;
+    if (!timer) {
+      if (leading) {
+        invoke();
+      }
+      startTimer();
+    } else {
+      // reset wait for trailing invocation
+      startTimer();
+    }
+    return result;
+  };
+
+  (debounced as any).cancel = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    lastArgs = lastThis = null;
+  };
+
+  (debounced as any).flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+      return invoke();
+    }
+    return result;
+  };
+
+  return debounced as ReturnType<typeof debounced> & {
+    cancel: () => void;
+    flush: () => ReturnType<T> | void;
+  };
+}
