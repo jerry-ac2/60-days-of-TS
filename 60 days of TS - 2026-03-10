@@ -1,0 +1,36 @@
+/**
+ * Run an async worker over an iterable with a concurrency limit.
+ *
+ * @template T, R
+ * @param {Iterable<T>} items - Iterable of input items.
+ * @param {(item: T, index: number) => Promise<R>} worker - Async mapper for each item.
+ * @param {number} [concurrency=4] - Max number of concurrent worker promises.
+ * @returns {Promise<R[]>} - Results array preserving input order.
+ *
+ * @example
+ * // limited to 3 concurrent requests
+ * const results = await asyncPool(urls, async (url) => fetch(url).then(r => r.json()), 3);
+ */
+export async function asyncPool<T, R>(
+  items: Iterable<T>,
+  worker: (item: T, index: number) => Promise<R>,
+  concurrency = 4
+): Promise<R[]> {
+  if (concurrency < 1) throw new Error("concurrency must be >= 1");
+  const it = items[Symbol.iterator]();
+  const results: R[] = [];
+  let idx = 0;
+  async function next(): Promise<void> {
+    const { value, done } = it.next();
+    if (done) return;
+    const current = idx++;
+    try {
+      results[current] = await worker(value, current);
+    } finally {
+      await next();
+    }
+  }
+  const starters = Array.from({ length: concurrency }, () => next());
+  await Promise.all(starters);
+  return results;
+}
