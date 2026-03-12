@@ -1,0 +1,56 @@
+/**
+ * 2026-03-12 — debounceAsync
+ *
+ * Debounces an async function so rapid calls return the same promise and only the
+ * last provided arguments are used when the function finally runs.
+ *
+ * Example:
+ *   const debounced = debounceAsync(async (q: string) => fetchData(q), 200);
+ *   const p1 = debounced("a"); // returns a promise
+ *   const p2 = debounced("ab"); // returns same promise; only "ab" used
+ *
+ * cancel() rejects the pending promise with a CancelError.
+ */
+export class CancelError extends Error { constructor() { super("Debounced call canceled"); } }
+
+export function debounceAsync<T extends (...args: any[]) => Promise<any>>(fn: T, wait = 0) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  let pending: { p: ReturnType<T>; resolve: (v: any) => void; reject: (e: any) => void } | null = null;
+
+  function call(...args: Parameters<T>): ReturnType<T> {
+    lastArgs = args;
+    if (!pending) {
+      let resolve!: (v: any) => void;
+      let reject!: (e: any) => void;
+      const p = new Promise<any>((res, rej) => { resolve = res; reject = rej; }) as ReturnType<T>;
+      pending = { p, resolve, reject };
+    }
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(async () => {
+      timer = null;
+      const argsToUse = lastArgs!;
+      lastArgs = null;
+      try {
+        const result = await fn(...argsToUse);
+        pending!.resolve(result);
+      } catch (e) {
+        pending!.reject(e);
+      } finally {
+        pending = null;
+      }
+    }, wait);
+    return pending.p;
+  }
+
+  call.cancel = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (pending) {
+      pending.reject(new CancelError());
+      pending = null;
+    }
+    lastArgs = null;
+  };
+
+  return call as typeof call & { cancel: () => void };
+}
