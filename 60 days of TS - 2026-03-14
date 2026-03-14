@@ -1,0 +1,70 @@
+/**
+ * debounceAsync: Debounce an async function so calls within `wait` ms coalesce into one call.
+ * - Returns a wrapped function that returns the same Promise for calls made while waiting.
+ * - Methods: cancel() to cancel pending call, flush() to immediately invoke pending call.
+ *
+ * Example:
+ *   const debounced = debounceAsync(fetchUser, 100);
+ *   const p1 = debounced(1);
+ *   const p2 = debounced(1); // p1 === p2
+ */
+export function debounceAsync<
+  F extends (...args: any[]) => Promise<any>
+>(fn: F, wait = 0) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<F> | null = null;
+  let pending: {
+    promise: Promise<Awaited<ReturnType<F>>>;
+    resolve: (v: any) => void;
+    reject: (e: any) => void;
+  } | null = null;
+
+  const invoke = () => {
+    if (!lastArgs) return;
+    const args = lastArgs;
+    lastArgs = null;
+    const p = fn(...args)
+      .then((v) => (pending && pending.resolve(v), v))
+      .catch((e) => (pending && pending.reject(e), Promise.reject(e)));
+    if (pending) pending.promise = p;
+    timer = null;
+  };
+
+  const wrapper = (...args: Parameters<F>) => {
+    lastArgs = args;
+    if (!pending) {
+      let resolve!: (v: any) => void;
+      let reject!: (e: any) => void;
+      const promise = new Promise<Awaited<ReturnType<F>>>((res, rej) => {
+        resolve = res; reject = rej;
+      });
+      pending = { promise, resolve, reject };
+    }
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(invoke, wait);
+    return pending.promise;
+  };
+
+  wrapper.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (pending) {
+      pending.reject(new Error("Debounced call cancelled"));
+      pending = null;
+    }
+    lastArgs = null;
+  };
+
+  wrapper.flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      invoke();
+    }
+    return pending ? pending.promise : Promise.resolve(undefined as any);
+  };
+
+  return wrapper as typeof wrapper & {
+    cancel: () => void;
+    flush: () => Promise<Awaited<ReturnType<F>>>;
+  };
+}
