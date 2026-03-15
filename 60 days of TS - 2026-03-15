@@ -1,0 +1,53 @@
+/**
+ * 2026-03-15 — Daily Coding Journal
+ *
+ * deepMerge: recursively merge plain objects and arrays.
+ * - Objects: merges keys recursively.
+ * - Arrays: merges by index (numeric keys) and concatenates extra items.
+ * - Primitives / differing types: latter value wins.
+ *
+ * Example:
+ *   deepMerge({a:1, b:{x:1}}, {b:{y:2}, c:3})
+ *   => {a:1, b:{x:1, y:2}, c:3}
+ */
+function isPlainObject(v: any): v is Record<string, any> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+export function deepMerge<T = any>(...sources: any[]): T {
+  if (sources.length === 0) return {} as T;
+  const out = Array.isArray(sources[0]) ? [] : {};
+  for (const src of sources) {
+    if (Array.isArray(out) && Array.isArray(src)) {
+      // merge arrays by index, then append extras
+      const max = Math.max(out.length, src.length);
+      for (let i = 0; i < max; i++) {
+        if (i in src && i in out) {
+          out[i] = isPlainObject(out[i]) && isPlainObject(src[i])
+            ? deepMerge(out[i], src[i])
+            : Array.isArray(out[i]) && Array.isArray(src[i])
+            ? deepMerge(out[i], src[i])
+            : src[i];
+        } else if (i in src) {
+          out[i] = src[i];
+        }
+      }
+    } else if (isPlainObject(out) && isPlainObject(src)) {
+      for (const k of Object.keys(src)) {
+        if (k in out) {
+          out[k] = isPlainObject(out[k]) && isPlainObject(src[k])
+            ? deepMerge(out[k], src[k])
+            : Array.isArray(out[k]) && Array.isArray(src[k])
+            ? deepMerge(out[k], src[k])
+            : src[k];
+        } else {
+          out[k] = src[k];
+        }
+      }
+    } else {
+      // types differ or primitive: replace entirely
+      return src as T;
+    }
+  }
+  return out as T;
+}
