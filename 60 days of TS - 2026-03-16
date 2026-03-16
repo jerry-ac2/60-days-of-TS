@@ -1,0 +1,31 @@
+/**
+ * 2026-03-16 — TIL: Object.hasOwn (ES2022)
+ *
+ * Short: Object.hasOwn(obj, prop) is a concise, safe alternative to
+ * Object.prototype.hasOwnProperty.call(obj, prop). It works with objects
+ * that have a null prototype and is less verbose.
+ */
+
+// Examples:
+const withProto = { a: 1 };
+const nullProto = Object.create(null);
+nullProto.b = 2;
+
+// concise checks:
+console.log(Object.hasOwn(withProto, 'a')); // true
+console.log(Object.hasOwn(nullProto, 'b')); // true
+
+// older pattern (equivalent but more verbose):
+console.log(Object.prototype.hasOwnProperty.call(withProto, 'a')); // true
+
+// symbol and computed key:
+const sym = Symbol('s');
+withProto[sym] = 3;
+const key = 'a';
+console.log(Object.hasOwn(withProto, sym)); // true
+console.log(Object.hasOwn(withProto, key)); // true
+
+// Note: Object.hasOwn throws on null/undefined, so guard when needed:
+function safeHasOwn(obj, prop) {
+  return obj != null && Object.hasOwn(obj, prop);
+}
