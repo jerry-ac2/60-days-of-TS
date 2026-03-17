@@ -1,0 +1,53 @@
+/**
+ * debounce - Returns a debounced version of `func`.
+ *
+ * @template F
+ * @param {F} func Function to debounce.
+ * @param {number} [wait=0] Milliseconds to wait.
+ * @param {boolean} [immediate=false] If true, call on the leading edge.
+ * @returns {F & {cancel:()=>void, flush:()=>ReturnType<F>|undefined}} Debounced function with cancel and flush.
+ *
+ * Example:
+ * const fn = debounce((x:number)=>console.log(x), 200);
+ * fn(1); // delayed
+ */
+export function debounce<F extends (...args: any[]) => any>(
+  func: F,
+  wait = 0,
+  immediate = false
+) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: any;
+  let lastThis: any;
+  let result: any;
+  const later = () => {
+    timeout = null;
+    if (!immediate) result = func.apply(lastThis, lastArgs);
+  };
+  const debounced = function (this: any, ...args: Parameters<F>) {
+    lastArgs = args;
+    lastThis = this;
+    const callNow = immediate && !timeout;
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+    if (callNow) result = func.apply(lastThis, lastArgs);
+    return result;
+  } as unknown as F & { cancel: () => void; flush: () => ReturnType<F> | undefined };
+  debounced.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+  };
+  debounced.flush = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      const r = func.apply(lastThis, lastArgs);
+      timeout = null;
+      result = r;
+      return r;
+    }
+    return result;
+  };
+  return debounced;
+}
