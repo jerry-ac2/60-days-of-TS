@@ -1,0 +1,19 @@
+# TIL — 2026-03-18: Object.hasOwn for safe property checks
+
+- Use Object.hasOwn(obj, key) instead of obj.hasOwnProperty(key) or Object.prototype.hasOwnProperty.call(obj, key).
+- It's shorter, avoids prototype-pollution pitfalls, and is clearer in intent.
+
+```js
+// safe property check (ES2022+)
+const obj = Object.create(null);
+obj.x = 1;
+
+console.log(Object.hasOwn(obj, 'x'));        // true
+console.log(Object.hasOwn(obj, 'toString')); // false
+
+// typical fallback for older environments:
+const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+console.log(hasOwn(obj, 'x')); // true
+```
+
+- Useful in loops, validation, and when objects may not inherit from Object.prototype.
