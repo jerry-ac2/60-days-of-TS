@@ -1,0 +1,47 @@
+/**
+ * asyncMemoize: memoize async functions with in-flight deduplication and TTL.
+ *
+ * Example:
+ * const fetchUser = asyncMemoize(async (id: number) => fetch(`/u/${id}`).then(r=>r.json()), { ttl: 5000 });
+ * await fetchUser(1); // cached for 5s; concurrent calls share the same promise
+ *
+ * Options:
+ * - ttl: milliseconds to keep a cached result (undefined => forever)
+ * - keyFn: (...args) => string, how to derive cache key from arguments (default: JSON.stringify)
+ */
+export function asyncMemoize<T, Args extends unknown[]>(
+  fn: (...args: Args) => Promise<T>,
+  options?: { ttl?: number; keyFn?: (...args: Args) => string }
+) {
+  const { ttl, keyFn = (...a: Args) => {
+    try { return JSON.stringify(a); } catch { return String(a); }
+  } } = options || {};
+  type Entry = { promise: Promise<T>; expires: number | null };
+  const cache = new Map<string, Entry>();
+
+  const memo = async (...args: Args) => {
+    const key = keyFn(...args);
+    const now = Date.now();
+    const existing = cache.get(key);
+    if (existing && (existing.expires === null || existing.expires > now)) return existing.promise;
+    const p = fn(...args);
+    cache.set(key, { promise: p, expires: ttl == null ? null : now + ttl });
+    try {
+      const res = await p;
+      return res;
+    } catch (err) {
+      // remove failed entries so subsequent calls can retry
+      const cur = cache.get(key);
+      if (cur && cur.promise === p) cache.delete(key);
+      throw err;
+    }
+  };
+
+  memo.clear = (...args: Args | []) => {
+    if (args.length === 0) { cache.clear(); return; }
+    const key = keyFn(...(args as Args));
+    cache.delete(key);
+  };
+
+  return memo as typeof memo & { clear: (...args: Args | []) => void };
+}
