@@ -1,0 +1,43 @@
+/**
+ * asyncPool - run async tasks with limited concurrency and preserve order.
+ *
+ * @param poolLimit max number of concurrently running promises (>=1)
+ * @param list iterable of input items
+ * @param iteratorFn async function(item, index) that returns a result
+ * @returns Promise resolving to array of results in the original order
+ *
+ * Example:
+ *   await asyncPool(3, urls, async (url) => fetch(url).then(r => r.text()));
+ */
+export async function asyncPool<T, R>(
+  poolLimit: number,
+  list: Iterable<T>,
+  iteratorFn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const items = Array.from(list);
+  const total = items.length;
+  if (total === 0) return [];
+  poolLimit = Math.max(1, Math.floor(poolLimit));
+  const results = new Array<R>(total);
+  let i = 0;
+  const executing: Promise<void>[] = [];
+
+  async function enqueue(): Promise<void> {
+    if (i >= total) return;
+    const idx = i++;
+    const p = Promise.resolve().then(() => iteratorFn(items[idx], idx)).then(res => {
+      results[idx] = res;
+    });
+    const e = p.then(() => {
+      const j = executing.indexOf(e);
+      if (j >= 0) executing.splice(j, 1);
+    });
+    executing.push(e);
+    if (executing.length >= poolLimit) await Promise.race(executing);
+    return enqueue();
+  }
+
+  await Promise.all(Array.from({ length: Math.min(poolLimit, total) }, () => enqueue()));
+  await Promise.all(executing);
+  return results;
+}
