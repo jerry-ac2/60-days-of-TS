@@ -1,0 +1,62 @@
+/**
+ * asyncRetry:
+ * Retry an async operation with configurable attempts and exponential backoff.
+ *
+ * @template T
+ * @param {() => Promise<T>} fn - The async function to run.
+ * @param {{
+ *   retries?: number,
+ *   initialDelayMs?: number,
+ *   factor?: number,
+ *   maxDelayMs?: number,
+ *   onRetry?: (error: unknown, attempt: number) => void,
+ *   signal?: AbortSignal
+ * }} [opts]
+ * @returns {Promise<T>}
+ *
+ * Throws the last error if all retries fail or if signal is aborted.
+ */
+export async function asyncRetry<T>(
+  fn: () => Promise<T>,
+  opts: {
+    retries?: number;
+    initialDelayMs?: number;
+    factor?: number;
+    maxDelayMs?: number;
+    onRetry?: (error: unknown, attempt: number) => void;
+    signal?: AbortSignal;
+  } = {}
+): Promise<T> {
+  const {
+    retries = 3,
+    initialDelayMs = 100,
+    factor = 2,
+    maxDelayMs = 10_000,
+    onRetry,
+    signal,
+  } = opts;
+
+  const sleep = (ms: number) =>
+    new Promise<void>((res, rej) => {
+      const id = setTimeout(res, ms);
+      if (signal) signal.addEventListener('abort', () => {
+        clearTimeout(id);
+        rej(new DOMException('Aborted', 'AbortError'));
+      });
+    });
+
+  let attempt = 0;
+  let delay = initialDelayMs;
+  while (true) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      return await fn();
+    } catch (err) {
+      attempt++;
+      if (attempt > retries) throw err;
+      onRetry?.(err, attempt);
+      await sleep(Math.min(delay, maxDelayMs));
+      delay = Math.min(delay * factor, maxDelayMs);
+    }
+  }
+}
