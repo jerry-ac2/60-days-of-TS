@@ -1,0 +1,31 @@
+```js
+// 2026-03-22 — TIL: Object.hasOwn (safer, shorter replacement for hasOwnProperty)
+//
+// - Object.hasOwn(obj, prop) is the modern, reliable way to test own properties.
+// - It avoids .hasOwnProperty being shadowed or missing (e.g., Object.create(null)).
+/* Examples */
+
+const proto = { shadowed: true };
+const obj = Object.create(proto);
+obj.a = 1;
+
+// Old safe pattern (verbose)
+const oldCheck = Object.prototype.hasOwnProperty.call(obj, 'a'); // true
+
+// Risky old pattern (can be broken if property shadowed)
+obj.hasOwnProperty = () => false;
+const riskyCheck = obj.hasOwnProperty('a'); // false — incorrect
+
+// New, concise, and safe
+const newCheck = Object.hasOwn(obj, 'a'); // true
+
+// Works even with null-prototype objects
+const mapLike = Object.create(null);
+mapLike.key = 42;
+const worksOnNullProto = Object.hasOwn(mapLike, 'key'); // true
+
+// Polyfill (only if environment lacks Object.hasOwn)
+if (!Object.hasOwn) {
+  Object.hasOwn = (obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop);
+}
+```
