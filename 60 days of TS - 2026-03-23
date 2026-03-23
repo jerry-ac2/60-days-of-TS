@@ -1,0 +1,28 @@
+# 2026-03-23 — Today I Learned: structuredClone for deep cloning in JS/TS
+
+structuredClone(obj) performs a deep, structured copy (handles Dates, RegExps, Maps, Sets, typed arrays, circular refs) unlike JSON serialization. It throws on functions, DOM nodes, and some host objects.
+
+Example:
+```js
+const original = { d: new Date(), m: new Map([['k','v']]), arr: [1,2, {x:3}] };
+const copy = structuredClone(original);
+console.log(copy.d instanceof Date); // true
+console.log(copy.m.get('k')); // "v"
+copy.arr[2].x = 42;
+console.log(original.arr[2].x); // 3 (unchanged)
+```
+
+Fallback (when structuredClone isn't available):
+```js
+function deepCloneFallback(obj) {
+  if (typeof structuredClone === 'function') return structuredClone(obj);
+  // best-effort fallback: MessageChannel-based clone (works in many environments)
+  return new Promise((res) => {
+    const {port1, port2} = new MessageChannel();
+    port2.onmessage = e => res(e.data);
+    port1.postMessage(obj);
+  });
+}
+```
+
+Caveats: structuredClone is synchronous; fallback above is async. Functions and certain platform objects cannot be cloned. Use it when you need reliable deep copies without serialization loss.
