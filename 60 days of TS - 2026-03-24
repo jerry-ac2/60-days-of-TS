@@ -1,0 +1,34 @@
+/**
+ * 2026-03-24 — deepMerge
+ *
+ * Recursively merges two objects. Arrays are replaced (not concatenated).
+ * Non-plain objects and primitives from `b` overwrite `a`.
+ *
+ * @param a - target/base object
+ * @param b - source object (properties here override/merge into `a`)
+ * @returns a new object typed as intersection of A & B
+ */
+export function deepMerge<A extends object, B extends object>(a: A, b: B): A & B {
+  const isPlain = (v: any) => v && typeof v === 'object' && !Array.isArray(v) && v.constructor === Object;
+  const result: any = Array.isArray(a) ? [...(a as any)] : { ...(a as any) };
+
+  for (const key of Object.keys(b) as (keyof B)[]) {
+    const av = (a as any)[key];
+    const bv = (b as any)[key];
+
+    if (isPlain(av) && isPlain(bv)) {
+      result[key] = deepMerge(av, bv);
+    } else {
+      // arrays and non-plain objects from `b` overwrite `a`
+      result[key] = bv;
+    }
+  }
+
+  return result;
+}
+
+/* Example:
+const x = { a: 1, nested: { x: 10 } };
+const y = { b: 2, nested: { y: 20 } };
+const merged = deepMerge(x, y); // { a:1, b:2, nested: { x:10, y:20 } }
+*/
