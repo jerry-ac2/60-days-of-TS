@@ -1,0 +1,19 @@
+# 2026-03-25 — TIL: Promise.any returns the first fulfilled promise (and fails if all reject)
+
+Promise.any(iterable) resolves with the first promise that fulfills. If every promise rejects, it rejects with an AggregateError containing all rejection reasons.
+
+Example:
+```js
+const p1 = Promise.reject('p1 err');
+const p2 = new Promise(r => setTimeout(() => r('p2 ok'), 50));
+const p3 = new Promise((_, rej) => setTimeout(() => rej('p3 err'), 10));
+
+Promise.any([p1, p2, p3])
+  .then(value => console.log('fulfilled:', value)) // -> "fulfilled: p2 ok"
+  .catch(err => console.error('all rejected:', err)); // AggregateError if all reject
+```
+
+Notes:
+- Unlike Promise.race, Promise.any ignores rejections until no fulfillments remain.
+- Use AggregateError.errors to inspect individual rejection reasons (supported in modern runtimes).
+- Polyfill: core-js or a small wrapper using Promise.allSettled to simulate behavior in older environments.
