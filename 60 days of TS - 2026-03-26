@@ -1,0 +1,59 @@
+/**
+ * retryWithBackoff - retry an async function with exponential backoff and optional jitter.
+ *
+ * @template T
+ * @param fn   Async function to execute.
+ * @param opts Options:
+ *   - retries: max attempts (default 5)
+ *   - baseDelay: initial delay in ms (default 100)
+ *   - factor: exponential factor (default 2)
+ *   - jitter: enable [0..1] random jitter fraction (default true)
+ *   - signal: AbortSignal to cancel retries
+ *   - onRetry: (err, attempt, delay) callback before next attempt
+ *
+ * Returns the resolved value or rejects with the last error.
+ *
+ * Date: 2026-03-26
+ */
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  {
+    retries = 5,
+    baseDelay = 100,
+    factor = 2,
+    jitter = true,
+    signal,
+    onRetry,
+  }: {
+    retries?: number;
+    baseDelay?: number;
+    factor?: number;
+    jitter?: boolean;
+    signal?: AbortSignal;
+    onRetry?: (err: unknown, attempt: number, delay: number) => void;
+  } = {}
+): Promise<T> {
+  let attempt = 0;
+  let lastErr: unknown;
+  while (attempt < retries) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      attempt++;
+      if (attempt >= retries) break;
+      let delay = baseDelay * Math.pow(factor, attempt - 1);
+      if (jitter) delay = Math.random() * delay;
+      onRetry?.(err, attempt, delay);
+      await new Promise<void>((res, rej) => {
+        const t = setTimeout(res, delay);
+        signal?.addEventListener('abort', () => {
+          clearTimeout(t);
+          rej(new DOMException('Aborted', 'AbortError'));
+        }, { once: true });
+      });
+    }
+  }
+  throw lastErr;
+}
