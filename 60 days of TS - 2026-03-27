@@ -1,0 +1,41 @@
+/**
+ * memoizeAsync - memoizes an async function with TTL and concurrent-call deduplication.
+ *
+ * @param fn async function to memoize
+ * @param opts optional settings:
+ *   - ttl: time-to-live in ms (default: Infinity)
+ *   - resolver: function to produce cache key from args (default: JSON.stringify)
+ *
+ * Behavior:
+ * - Concurrent calls with the same key share the same in-flight Promise.
+ * - If a cached Promise rejects, the cache entry is removed so subsequent calls can retry.
+ *
+ * Example:
+ * const memoized = memoizeAsync(fetchUser, { ttl: 60_000 });
+ */
+export function memoizeAsync<
+  F extends (...args: any[]) => Promise<any>
+>(fn: F, opts?: { ttl?: number; resolver?: (...args: Parameters<F>) => string }) {
+  const ttl = opts?.ttl ?? Infinity;
+  const resolver = opts?.resolver ?? ((...a: Parameters<F>) => JSON.stringify(a));
+  type P = ReturnType<F>;
+  const cache = new Map<string, { promise: P; expiresAt: number }>();
+
+  return function (...args: Parameters<F>): P {
+    const key = resolver(...args);
+    const now = Date.now();
+    const entry = cache.get(key);
+    if (entry && entry.expiresAt > now) return entry.promise;
+
+    const promise = fn(...args) as P;
+    cache.set(key, { promise, expiresAt: now + ttl });
+
+    // If the promise rejects, remove the cache entry so future calls can retry.
+    promise.catch(() => {
+      const current = cache.get(key);
+      if (current && current.promise === promise) cache.delete(key);
+    });
+
+    return promise;
+  } as F;
+}
