@@ -1,0 +1,50 @@
+/**
+ * memoizeAsync
+ * Date: 2026-03-28
+ *
+ * Memoizes an async function (Promise-returning). Handles in-flight deduplication
+ * so concurrent calls with same args share the same Promise. Optional TTL (ms).
+ * Removes cache on rejection so errors aren't cached forever.
+ *
+ * Example:
+ *   const memo = memoizeAsync(fetchJson, { ttl: 5000 });
+ *   await memo('/api/data');
+ *
+ * Options:
+ *   keyResolver?: (...args) => string  // default: JSON.stringify(args)
+ *   ttl?: number                        // milliseconds, 0 = no expiry
+ */
+export function memoizeAsync<T extends (...args: any[]) => Promise<any>>(
+  fn: T,
+  opts?: { keyResolver?: (...args: Parameters<T>) => string; ttl?: number }
+) {
+  const { keyResolver = (...a: any[]) => JSON.stringify(a), ttl = 0 } = opts || {};
+  const cache = new Map<string, { promise: ReturnType<T>; expiresAt?: number }>();
+
+  const wrapped = (...args: Parameters<T>) => {
+    const key = keyResolver(...args);
+    const entry = cache.get(key);
+    const now = Date.now();
+
+    if (entry) {
+      if (!entry.expiresAt || entry.expiresAt > now) return entry.promise;
+      cache.delete(key); // expired
+    }
+
+    const promise = fn(...args) as ReturnType<T>;
+    const expiresAt = ttl > 0 ? now + ttl : undefined;
+    cache.set(key, { promise, expiresAt });
+
+    // If the promise rejects, remove it so callers can retry.
+    promise.catch(() => {
+      const cur = cache.get(key);
+      if (cur && cur.promise === promise) cache.delete(key);
+    });
+
+    return promise;
+  };
+
+  (wrapped as any).clear = () => cache.clear();
+  (wrapped as any).delete = (args: Parameters<T>) => cache.delete(keyResolver(...args));
+  return wrapped as T & { clear(): void; delete(args: Parameters<T>): boolean };
+}
