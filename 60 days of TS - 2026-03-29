@@ -1,0 +1,46 @@
+/**
+ * memoizeAsync - coalesces concurrent async calls and optionally caches results with TTL.
+ * Date: 2026-03-29
+ *
+ * @example
+ * const fetchUser = async (id: number) => fetch(`/u/${id}`).then(r => r.json());
+ * const memoFetch = memoizeAsync(fetchUser, { ttl: 5000 });
+ * // concurrent calls for same id share the same in-flight promise
+ * memoFetch(1).then(...);
+ *
+ * Options:
+ * - ttl (ms): time-to-live for cached results (clears after ttl)
+ * - cacheFailures: if true, failed promises are cached; default false
+ * - keyResolver: custom (...args) => string to build cache key (default JSON.stringify)
+ */
+export function memoizeAsync<TArgs extends any[], R>(
+  fn: (...args: TArgs) => Promise<R>,
+  opts?: { ttl?: number; cacheFailures?: boolean; keyResolver?: (...args: TArgs) => string },
+) {
+  const { ttl, cacheFailures = false, keyResolver = (...a: TArgs) => JSON.stringify(a) } = opts || {};
+  const cache = new Map<string, { promise: Promise<R>; timer?: ReturnType<typeof setTimeout> }>();
+
+  return function (...args: TArgs): Promise<R> {
+    const key = keyResolver(...args);
+    const entry = cache.get(key);
+    if (entry) return entry.promise;
+
+    const p = fn(...args).then(
+      (res) => {
+        // keep cached result until ttl expires (timer set below)
+        return res;
+      },
+      (err) => {
+        if (!cacheFailures) cache.delete(key);
+        throw err;
+      },
+    );
+
+    const item: { promise: Promise<R>; timer?: ReturnType<typeof setTimeout> } = { promise: p };
+    if (typeof ttl === 'number' && ttl > 0) {
+      item.timer = setTimeout(() => cache.delete(key), ttl);
+    }
+    cache.set(key, item);
+    return p;
+  };
+}
