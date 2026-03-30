@@ -1,0 +1,37 @@
+/**
+ * asyncPool(tasks, concurrency)
+ *
+ * Run an iterable of async functions with a maximum number of concurrent executions.
+ *
+ * - tasks: Iterable of functions that return a Promise<T>.
+ * - concurrency: max number of promises running at once (>=1).
+ * Returns a Promise resolving to an array of results in the original task order.
+ *
+ * Example:
+ *   const tasks = urls.map(u => () => fetch(u).then(r => r.text()));
+ *   const results = await asyncPool(tasks, 5);
+ *
+ * Date: 2026-03-30
+ */
+export async function asyncPool<T>(tasks: Iterable<() => Promise<T>>, concurrency = 4): Promise<T[]> {
+  if (concurrency < 1) throw new Error("concurrency must be >= 1");
+  const taskArray = Array.isArray(tasks) ? tasks : Array.from(tasks);
+  const results: T[] = new Array(taskArray.length);
+  let i = 0;
+  async function worker() {
+    while (true) {
+      const idx = i++;
+      if (idx >= taskArray.length) return;
+      try {
+        results[idx] = await taskArray[idx]();
+      } catch (err) {
+        // propagate first error; other workers will naturally settle later,
+        // but Promise.all below will reject with this error.
+        throw err;
+      }
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, taskArray.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
