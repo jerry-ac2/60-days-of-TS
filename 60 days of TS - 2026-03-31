@@ -1,0 +1,42 @@
+/**
+ * memoizeAsync
+ * Cache in-flight & resolved Promise results of an async function keyed by arguments.
+ *
+ * Options:
+ *  - ttl (ms): time-to-live for cached resolved promises (default: Infinity)
+ *  - serializer: custom function to derive cache key from arguments
+ *
+ * Behavior:
+ *  - Concurrent calls with same key share the same in-flight Promise.
+ *  - Rejected promises are not cached (entry removed).
+ *  - Returned function has `clear()` to evict cache.
+ */
+export function memoizeAsync<T extends (...args: any[]) => Promise<any>>(
+  fn: T,
+  opts?: { ttl?: number; serializer?: (...args: Parameters<T>) => string }
+) {
+  const ttl = opts?.ttl ?? Infinity;
+  const serializer = opts?.serializer ?? ((...a: Parameters<T>) => {
+    try { return JSON.stringify(a); } catch { return String(a); }
+  });
+
+  const cache = new Map<string, { promise: ReturnType<T>; ts: number }>();
+
+  const wrapped = (...args: Parameters<T>): ReturnType<T> => {
+    const key = serializer(...args);
+    const now = Date.now();
+    const entry = cache.get(key);
+    if (entry && (now - entry.ts) <= ttl) return entry.promise;
+
+    const p = fn(...args) as ReturnType<T>;
+    cache.set(key, { promise: p, ts: now });
+
+    // On rejection, remove cache entry so callers can retry later.
+    p.catch(() => { if (cache.get(key)?.promise === p) cache.delete(key); });
+
+    return p;
+  };
+
+  wrapped.clear = () => cache.clear();
+  return wrapped as typeof wrapped & { clear: () => void };
+}
