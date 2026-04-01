@@ -1,0 +1,26 @@
+/**
+ * 2026-04-01 — TIL: nullish coalescing (??) vs logical OR (||) with optional chaining.
+ * Use ?? when you want to treat only null/undefined as "missing", not other falsy values (0, "", false).
+ */
+
+const obj = { a: 0, b: '', c: false, d: null };
+
+console.log(obj.a ?? 42); // 0   (keeps 0)
+console.log(obj.a || 42); // 42  (treats 0 as falsy)
+
+console.log(obj.b ?? 'x'); // ''  (keeps empty string)
+console.log(obj.b || 'x'); // 'x' (empty string treated as falsy)
+
+console.log(obj.c ?? true); // false
+console.log(obj.c || true); // true
+
+console.log(obj.d ?? 'was null'); // 'was null'  (null considered missing)
+console.log(obj.d || 'was null'); // 'was null'
+
+const maybe = null;
+console.log(maybe?.x ?? 'missing'); // 'missing'
+console.log(maybe?.x || 'missing'); // 'missing'
+
+const data = { nested: { value: 0 } };
+console.log(data?.nested?.value ?? 99); // 0
+console.log(data?.nested?.value || 99); // 99
