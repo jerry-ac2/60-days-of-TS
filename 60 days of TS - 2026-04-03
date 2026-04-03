@@ -1,0 +1,40 @@
+// 2026-04-03 — memoizeAsync: memoize sync/async functions with TTL & maxSize
+/**
+ * Memoizes a function (sync or async). Returns a function that always returns a Promise.
+ * Options:
+ *  - ttl: milliseconds before a cached entry expires (undefined = never)
+ *  - maxSize: max number of entries; evicts oldest when exceeded
+ *  - key: custom key resolver for arguments
+ *
+ * Example:
+ *  const m = memoizeAsync(async (id)=>fetch(`/u/${id}`).then(r=>r.json()), { ttl:60000 });
+ *  await m(1);
+ */
+export function memoizeAsync<TArgs extends any[], R>(
+  fn: (...args: TArgs) => Promise<R> | R,
+  opts?: { ttl?: number; maxSize?: number; key?: (...args: TArgs) => string }
+) {
+  const cache = new Map<string, { value: Promise<R>; t: number }>();
+  const keyer = opts?.key ?? ((...a: TArgs) => {
+    try { return JSON.stringify(a); } catch { return String(a); }
+  });
+  async function wrapped(...args: TArgs): Promise<R> {
+    const k = keyer(...args);
+    const now = Date.now();
+    const hit = cache.get(k);
+    if (hit && (opts?.ttl == null || now - hit.t < opts.ttl)) return hit.value;
+    const p = Promise.resolve().then(() => fn(...args));
+    cache.set(k, { value: p, t: now });
+    if (opts?.maxSize && cache.size > opts.maxSize) {
+      const oldest = cache.keys().next().value;
+      cache.delete(oldest);
+    }
+    return p;
+  }
+  (wrapped as any).clear = () => cache.clear();
+  (wrapped as any).has = (k: string) => cache.has(k);
+  (wrapped as any).delete = (k: string) => cache.delete(k);
+  return wrapped as ((...args: TArgs) => Promise<R>) & {
+    clear: () => void; has: (k: string) => boolean; delete: (k: string) => boolean;
+  };
+}
