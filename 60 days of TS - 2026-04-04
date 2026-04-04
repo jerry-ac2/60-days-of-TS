@@ -1,0 +1,23 @@
+# Today I Learned — 2026-04-04
+Structured deep cloning in modern JS: structuredClone preserves Dates, Maps, Sets, RegExps, ArrayBuffers, BigInts, circular refs, etc. Use it when available; otherwise fall back to a lossy JSON approach.
+
+```js
+/**
+ * deepClone(obj): deep clones a value.
+ * - Uses global structuredClone when available (preserves rich types + cycles).
+ * - Falls back to JSON-based clone (loses functions, Dates, Maps, Sets, etc.).
+ *
+ * Usage:
+ *   const copy = deepClone(original);
+ */
+export function deepClone(obj) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(obj);
+  }
+  return JSON.parse(JSON.stringify(obj)); // lossy fallback
+}
+
+// Example:
+// const original = { d: new Date(), arr: [1,2], nested: { a: 1 } };
+// const copy = deepClone(original);
+```
