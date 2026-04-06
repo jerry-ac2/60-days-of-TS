@@ -1,0 +1,52 @@
+/**
+ * retryAsync - Retry an async function with exponential backoff.
+ * Date: 2026-04-06
+ *
+ * @param fn - function returning a Promise<T>
+ * @param options - {
+ *   retries: number (default 3),
+ *   delay: number ms base delay (default 100),
+ *   factor: multiplier per attempt (default 2),
+ *   jitter: boolean to add random +-50% jitter (default true),
+ *   signal?: AbortSignal to cancel retries
+ * }
+ * @returns Promise<T> - resolves with fn() result or rejects with last error
+ */
+export async function retryAsync<T>(
+  fn: () => Promise<T>,
+  options?: {
+    retries?: number;
+    delay?: number;
+    factor?: number;
+    jitter?: boolean;
+    signal?: AbortSignal;
+  }
+): Promise<T> {
+  const { retries = 3, delay = 100, factor = 2, jitter = true, signal } = options ?? {};
+  let attempt = 0;
+  let lastError: any;
+  const wait = (ms: number) =>
+    new Promise<void>((res, rej) => {
+      if (signal?.aborted) return rej(new DOMException('Aborted', 'AbortError'));
+      const t = setTimeout(res, ms);
+      signal?.addEventListener('abort', () => {
+        clearTimeout(t);
+        rej(new DOMException('Aborted', 'AbortError'));
+      }, { once: true });
+    });
+  while (attempt <= retries) {
+    try {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt === retries) break;
+      const base = delay * Math.pow(factor, attempt);
+      const jitterFactor = jitter ? (0.5 + Math.random()) : 1; // 0.5x-1.5x
+      const ms = Math.max(0, Math.round(base * jitterFactor));
+      await wait(ms);
+      attempt++;
+    }
+  }
+  throw lastError;
+}
