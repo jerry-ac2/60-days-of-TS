@@ -1,0 +1,66 @@
+/**
+ * debounce(fn, wait)
+ * Returns a debounced version of fn that always returns a Promise of fn's result.
+ * The returned function has .cancel() and .flush() helpers.
+ *
+ * - Multiple calls within `wait` will resolve to the same final invocation result.
+ * - Works with sync or async functions.
+ *
+ * Example:
+ * const debounced = debounce(async (x)=> x*2, 100);
+ * debounced(1).then(console.log); debounced(2); // resolves with 4 after 100ms
+ */
+export function debounce<T extends (...args: any[]) => any>(fn: T, wait = 0) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: any[] | null = null;
+  let pending: { resolve: (v: any) => void; reject: (e: any) => void }[] = [];
+
+  const invoke = async (args: any[]) => {
+    try {
+      const res = await fn(...args);
+      pending.forEach(p => p.resolve(res));
+      pending = [];
+      return res;
+    } catch (e) {
+      pending.forEach(p => p.reject(e));
+      pending = [];
+      throw e;
+    }
+  };
+
+  const debounced = (function (...args: any[]) {
+    lastArgs = args;
+    return new Promise<any>((resolve, reject) => {
+      pending.push({ resolve, reject });
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        const argsToCall = lastArgs!;
+        lastArgs = null;
+        void invoke(argsToCall);
+      }, wait);
+    });
+  }) as ((...a: Parameters<T>) => Promise<Awaited<ReturnType<T>>>) & {
+    cancel: () => void;
+    flush: () => Promise<Awaited<ReturnType<T>> | undefined>;
+  };
+
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    pending.forEach(p => p.reject(new Error('Debounced function cancelled')));
+    pending = [];
+    lastArgs = null;
+  };
+
+  debounced.flush = async () => {
+    if (!timer) return undefined;
+    clearTimeout(timer);
+    timer = null;
+    const argsToCall = lastArgs!;
+    lastArgs = null;
+    return invoke(argsToCall);
+  };
+
+  return debounced;
+}
