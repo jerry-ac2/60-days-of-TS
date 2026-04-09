@@ -1,0 +1,79 @@
+/**
+ * debounce: Promise-aware debounce with cancel/flush and leading/trailing options.
+ *
+ * Usage:
+ *   const debounced = debounce(asyncFn, 200, { leading: false, trailing: true });
+ *   const p = debounced(...args); // returns Promise of asyncFn result
+ *
+ * Options:
+ *   leading: call at start of burst
+ *   trailing: call at end of burst
+ */
+export function debounce<T extends (...a: any[]) => any>(
+  fn: T,
+  wait = 100,
+  { leading = false, trailing = true } = {}
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  let pending: {
+    promise: Promise<ReturnType<T>>;
+    resolve: (v: any) => void;
+    reject: (e: any) => void;
+  } | null = null;
+
+  const invoke = (args: Parameters<T>) => {
+    try {
+      const result = fn(...args);
+      if (pending) Promise.resolve(result).then(pending.resolve, pending.reject);
+    } catch (e) {
+      pending?.reject(e);
+    } finally {
+      pending = null;
+    }
+  };
+
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      if (trailing && lastArgs) invoke(lastArgs);
+      lastArgs = null;
+    }, wait);
+  };
+
+  const wrapped = (...args: Parameters<T>) => {
+    lastArgs = args;
+    if (!pending) {
+      let resResolve!: (v: any) => void;
+      let resReject!: (e: any) => void;
+      const p = new Promise<ReturnType<T>>((r, j) => { resResolve = r; resReject = j; });
+      pending = { promise: p, resolve: resResolve, reject: resReject };
+    }
+
+    if (leading && !timer) {
+      invoke(args);
+      // start window to suppress immediate repeats
+      timer = setTimeout(() => { timer = null; }, wait);
+      lastArgs = null;
+      return pending.promise;
+    }
+
+    if (trailing) schedule();
+    return pending.promise;
+  };
+
+  (wrapped as any).cancel = (reason?: any) => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (pending) { pending.reject(reason ?? new Error('debounced cancelled')); pending = null; }
+    lastArgs = null;
+  };
+
+  (wrapped as any).flush = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (pending && lastArgs) invoke(lastArgs);
+    lastArgs = null;
+  };
+
+  return wrapped as typeof fn & { cancel(reason?: any): void; flush(): void };
+}
