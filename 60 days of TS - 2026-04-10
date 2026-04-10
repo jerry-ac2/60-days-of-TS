@@ -1,0 +1,29 @@
+/**
+ * groupBy.ts
+ * 2026-04-10
+ *
+ * Group an array of items by a computed key.
+ *
+ * @example
+ * const users = [{id:1, role:'admin'}, {id:2, role:'user'}, {id:3, role:'admin'}];
+ * const byRole = groupBy(users, u => u.role);
+ * // byRole => { admin: [{...},{...}], user: [{...}] }
+ *
+ * @template T - item type
+ * @template K - key type (string | number | symbol)
+ * @param {T[]} arr - array to group
+ * @param {(item: T) => K} keyFn - function that returns the grouping key
+ * @returns {Record<K, T[]>} object mapping keys to arrays of items
+ */
+export function groupBy<T, K extends string | number | symbol>(
+  arr: T[],
+  keyFn: (item: T) => K
+): Record<K, T[]> {
+  return arr.reduce((acc, item) => {
+    const key = keyFn(item);
+    const k = key as unknown as K;
+    if (!acc[k]) acc[k] = [];
+    acc[k].push(item);
+    return acc;
+  }, {} as Record<K, T[]>);
+}
