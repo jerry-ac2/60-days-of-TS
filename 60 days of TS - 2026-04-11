@@ -1,0 +1,37 @@
+/*
+2026-04-11 — TIL: Microtasks vs Macrotasks in JS event loop
+
+- Microtasks: Promise.then, queueMicrotask, async/await continuations, MutationObserver callbacks.
+  They run after the current task finishes but before the next macrotask.
+- Macrotasks: setTimeout, setInterval, I/O, UI rendering tasks.
+- Microtasks are FIFO and always drain fully before the next macrotask runs.
+- Use queueMicrotask to schedule work that must run immediately after the current stack
+  but before yielding back to rendering or timers.
+
+Example below demonstrates ordering.
+*/
+
+console.log('start');
+
+setTimeout(() => console.log('timeout (macrotask)'), 0);
+
+Promise.resolve().then(() => console.log('promise.then (microtask)'));
+
+queueMicrotask(() => console.log('queueMicrotask (microtask)'));
+
+(async function () {
+  await 0;
+  console.log('after await (microtask)');
+})();
+
+console.log('end');
+
+/*
+Expected output:
+start
+end
+promise.then (microtask)
+queueMicrotask (microtask)
+after await (microtask)
+timeout (macrotask)
+*/
