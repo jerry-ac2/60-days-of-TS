@@ -1,0 +1,41 @@
+/**
+ * Memoize an async function with in-flight deduplication and optional TTL.
+ *
+ * Example:
+ *   const fetchUser = memoizeAsync(async (id)=> fetch(...).then(r=>r.json()), { ttl: 5000 });
+ *   await fetchUser(1); // subsequent concurrent/near calls reuse the same promise/result
+ *
+ * @param fn - async function to memoize
+ * @param options.ttl - milliseconds to keep cache entry (undefined = forever)
+ * @param options.resolver - function(...args)=>key used to identify cache entry
+ */
+export function memoizeAsync<F extends (...a: any[]) => Promise<any>>(
+  fn: F,
+  options?: { ttl?: number; resolver?: (...a: Parameters<F>) => any }
+) {
+  const cache = new Map<any, { p: Promise<ReturnType<F>>; exp?: number }>();
+  const resolver = options?.resolver ?? ((...a: any[]) => {
+    try { return JSON.stringify(a); } catch { return String(a); }
+  });
+  async function wrapped(...args: Parameters<F>): Promise<ReturnType<F>> {
+    const key = resolver(...args);
+    const now = Date.now();
+    const entry = cache.get(key);
+    if (entry) {
+      if (entry.exp === undefined || entry.exp > now) return entry.p;
+      cache.delete(key); // expired
+    }
+    const p = (async () => fn(...args))();
+    cache.set(key, { p, exp: options?.ttl ? now + options.ttl : undefined });
+    try {
+      const res = await p;
+      return res;
+    } catch (err) {
+      cache.delete(key); // don't cache rejections
+      throw err;
+    }
+  }
+  wrapped.clear = () => cache.clear();
+  wrapped.delete = (key: any) => cache.delete(key);
+  return wrapped as typeof wrapped & { clear(): void; delete(k: any): boolean };
+}
