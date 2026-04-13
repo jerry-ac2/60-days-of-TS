@@ -1,0 +1,36 @@
+# 2026-04-13 — Fun Coding Challenge: Longest Substring with At Most K Distinct Characters
+
+Challenge:
+- Given a string s and integer k, return the length of the longest substring that contains at most k distinct characters.
+
+Solution (JavaScript, O(n) sliding window):
+```javascript
+/**
+ * longestAtMostKDistinct(s, k)
+ * @param {string} s
+ * @param {number} k
+ * @returns {number} length of longest substring with <= k distinct chars
+ *
+ * Sliding window with a frequency map. Expand right, shrink left when
+ * distinct count > k. Works in O(n) time and O(min(n, charset)) space.
+ */
+function longestAtMostKDistinct(s, k) {
+  if (k === 0 || s.length === 0) return 0;
+  const freq = new Map();
+  let left = 0, best = 0;
+  for (let right = 0; right < s.length; right++) {
+    const c = s[right];
+    freq.set(c, (freq.get(c) || 0) + 1);
+    while (freq.size > k) {
+      const lc = s[left++];
+      const count = freq.get(lc) - 1;
+      if (count === 0) freq.delete(lc); else freq.set(lc, count);
+    }
+    best = Math.max(best, right - left + 1);
+  }
+  return best;
+}
+
+// Example:
+// console.log(longestAtMostKDistinct("eceba", 2)); // -> 3 ("ece")
+```
