@@ -1,0 +1,62 @@
+/**
+ * Retry an async function with exponential backoff and optional jitter/abort.
+ *
+ * @template T
+ * @param {() => Promise<T>} fn - The async operation to retry.
+ * @param {object} [options]
+ * @param {number} [options.retries=3] - Total number of attempts.
+ * @param {number} [options.initialDelay=100] - Delay before first retry in ms.
+ * @param {number} [options.factor=2] - Exponential factor for backoff.
+ * @param {number} [options.maxDelay=10000] - Maximum delay in ms.
+ * @param {boolean} [options.jitter=true] - Apply jitter to reduce thundering herd.
+ * @param {(err:any, attempt:number) => void} [options.onRetry] - Called before each retry.
+ * @param {AbortSignal} [options.signal] - Abort signal to cancel retries.
+ * @returns {Promise<T>}
+ */
+export async function retry<T>(
+  fn: () => Promise<T>,
+  {
+    retries = 3,
+    initialDelay = 100,
+    factor = 2,
+    maxDelay = 10000,
+    jitter = true,
+    onRetry,
+    signal,
+  }: {
+    retries?: number;
+    initialDelay?: number;
+    factor?: number;
+    maxDelay?: number;
+    jitter?: boolean;
+    onRetry?: (err: any, attempt: number) => void;
+    signal?: AbortSignal;
+  } = {}
+): Promise<T> {
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) return reject(new Error('Aborted'));
+      const id = setTimeout(resolve, ms);
+      const onAbort = () => {
+        clearTimeout(id);
+        reject(new Error('Aborted'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+
+  let lastErr: any;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    if (signal?.aborted) throw new Error('Aborted');
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === retries) break;
+      onRetry?.(err, attempt);
+      let delay = Math.min(initialDelay * Math.pow(factor, attempt - 1), maxDelay);
+      if (jitter) delay = Math.floor(delay * (0.5 + Math.random() * 0.5));
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
