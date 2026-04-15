@@ -1,0 +1,54 @@
+/**
+ * retryAsync — retry an async function with exponential backoff and optional jitter.
+ * Date: 2026-04-15
+ *
+ * @param fn        - async function to execute
+ * @param options   - configuration:
+ *   attempts   (default 5)  - max tries (including first)
+ *   baseDelay  (ms, 100)    - initial backoff
+ *   factor     (2)          - exponential multiplier
+ *   maxDelay   (ms, 10000)  - cap for delay
+ *   jitter     (true)       - randomize delay in [0, delay]
+ *   shouldRetry(err)        - predicate; return false to stop retrying
+ *   onRetry(err, attempt, delay) - optional hook before next attempt
+ *
+ * @returns resolved value of fn or throws last error
+ *
+ * Example:
+ *   await retryAsync(() => fetch(url), { attempts: 4, baseDelay: 200 });
+ */
+export async function retryAsync<T>(
+  fn: () => Promise<T>,
+  {
+    attempts = 5,
+    baseDelay = 100,
+    factor = 2,
+    maxDelay = 10000,
+    jitter = true,
+    shouldRetry = () => true,
+    onRetry,
+  }: {
+    attempts?: number;
+    baseDelay?: number;
+    factor?: number;
+    maxDelay?: number;
+    jitter?: boolean;
+    shouldRetry?: (err: unknown) => boolean;
+    onRetry?: (err: unknown, attempt: number, delay: number) => void;
+  } = {}
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === attempts || !shouldRetry(err)) break;
+      let delay = Math.min(baseDelay * Math.pow(factor, attempt - 1), maxDelay);
+      if (jitter) delay = Math.random() * delay;
+      onRetry?.(err, attempt, delay);
+      await new Promise((res) => setTimeout(res, delay));
+    }
+  }
+  throw lastErr;
+}
