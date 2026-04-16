@@ -1,0 +1,24 @@
+# 2026-04-16 — TIL: structuredClone for deep cloning
+
+- structuredClone(obj) is a fast, built-in deep clone available in modern browsers and Node.js.
+- It preserves circular references and many built-in types (Date, RegExp, Map, Set, ArrayBuffer, TypedArray, Blob, etc.).
+- It does NOT clone functions, DOM nodes, or internal closures — those will throw or be lost.
+- If you need a simple fallback for plain data, JSON works; for richer types, prefer polyfills or worker-based approaches.
+
+```js
+// Example usage and a pragmatic fallback for plain JSON-safe data
+// Note: prefer native structuredClone when available.
+function deepClone(value) {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  // Fallback: only for JSON-serializable data (no Dates, Maps, Sets, circular refs, etc.)
+  return JSON.parse(JSON.stringify(value));
+}
+
+// Demonstration
+const a = { x: 1 };
+a.self = a; // circular
+const copy = (() => {
+  try { return deepClone(a); } catch (e) { return 'fallback failed: ' + e; }
+})();
+console.log(copy); // with structuredClone: a deep clone preserving circular refs; fallback will throw
+```
