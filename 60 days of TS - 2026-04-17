@@ -1,0 +1,33 @@
+/**
+ * 2026-04-17 — memoizeAsync
+ *
+ * Memoizes an async function (Promise-returning). Deduplicates in-flight calls
+ * and optionally expires cache entries after ttlMs. Rejected results are not cached.
+ *
+ * @param fn Async function to memoize
+ * @param ttlMs Time-to-live in milliseconds (0 = never expire)
+ * @returns Wrapped function that returns cached Promise when possible
+ */
+export function memoizeAsync<TArgs extends any[], TResult>(
+  fn: (...args: TArgs) => Promise<TResult>,
+  ttlMs = 0
+): (...args: TArgs) => Promise<TResult> {
+  const cache = new Map<string, { promise: Promise<TResult>; expiresAt: number }>()
+  const makeKey = (args: TArgs) => {
+    try { return JSON.stringify(args) } catch { return String(args) }
+  }
+
+  return (...args: TArgs) => {
+    const key = makeKey(args)
+    const now = Date.now()
+    const entry = cache.get(key)
+    if (entry && (ttlMs === 0 || entry.expiresAt > now)) return entry.promise
+
+    const promise = fn(...args).catch(err => {
+      cache.delete(key)
+      throw err
+    })
+    cache.set(key, { promise, expiresAt: ttlMs > 0 ? now + ttlMs : Infinity })
+    return promise
+  }
+}
