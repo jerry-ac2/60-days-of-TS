@@ -1,0 +1,69 @@
+/**
+ * Debounce a function with leading/trailing control, cancel and flush helpers.
+ *
+ * @example
+ * const debounced = debounce((x:number)=> console.log(x), 200, {leading:true});
+ * debounced(1); // immediate
+ * debounced(2); // ignored until 200ms, trailing won't fire because no pending args
+ *
+ * @param fn function to debounce
+ * @param wait milliseconds
+ * @param options { leading?: boolean, trailing?: boolean } (defaults: {leading:false, trailing:true})
+ */
+export function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  wait: number,
+  options: { leading?: boolean; trailing?: boolean } = {}
+) {
+  const { leading = false, trailing = true } = options;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  let lastThis: any = null;
+  let result: ReturnType<T> | undefined;
+  let pending = false;
+
+  const invoke = () => {
+    if (lastArgs === null) return;
+    result = fn.apply(lastThis, lastArgs);
+    lastArgs = lastThis = null;
+    pending = false;
+  };
+
+  function debounced(...args: Parameters<T>) {
+    lastArgs = args;
+    lastThis = this;
+    pending = true;
+
+    if (!timer && leading) {
+      // call immediately on leading edge
+      invoke();
+    }
+
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      if (trailing && pending) invoke();
+    }, wait);
+  }
+
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    lastArgs = lastThis = null;
+    pending = false;
+  };
+
+  debounced.flush = () => {
+    if (timer) {
+      if (trailing && pending) invoke();
+      clearTimeout(timer);
+      timer = null;
+    }
+    return result;
+  };
+
+  return debounced as ((...args: Parameters<T>) => void) & {
+    cancel: () => void;
+    flush: () => ReturnType<T> | undefined;
+  };
+}
