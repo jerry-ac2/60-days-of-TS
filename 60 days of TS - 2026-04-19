@@ -1,0 +1,34 @@
+# TIL (2026-04-19) — Use structuredClone for reliable deep copies
+
+structuredClone is a native browser/Node API for deep-cloning many built-in JS types (Date, Map, Set, ArrayBuffer, TypedArrays, BigInt, Blob, etc.). It does not clone functions or DOM nodes. Fallbacks exist for older environments.
+
+```js
+/**
+ * deepClone(value): use structuredClone when available, with fallbacks.
+ * - Preserves many built-ins (Date, Map, Set, BigInt, TypedArrays).
+ * - Does NOT clone functions or DOM nodes.
+ */
+export function deepClone(value) {
+  if (typeof structuredClone === "function") return structuredClone(value);
+
+  // Browser/Worker fallback using MessageChannel (preserves structured-clone-able objects)
+  if (typeof globalThis.MessageChannel === "function") {
+    return new Promise((resolve) => {
+      const { port1, port2 } = new MessageChannel();
+      port1.onmessage = (ev) => resolve(ev.data);
+      port2.postMessage(value);
+    });
+  }
+
+  // Last-resort JSON fallback (loses Dates, Maps, Sets, BigInt, undefined, functions)
+  return JSON.parse(JSON.stringify(value));
+}
+
+// Example usage:
+// (in older env the MessageChannel branch returns a Promise)
+(async () => {
+  const original = { d: new Date(), arr: [1, 2], m: new Map([["a", 1]]) };
+  const copy = await deepClone(original);
+  console.log(copy);
+})();
+```
