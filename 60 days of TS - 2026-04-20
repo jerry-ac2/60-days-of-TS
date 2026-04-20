@@ -1,0 +1,29 @@
+/**
+ * 2026-04-20 — Coding challenge: Longest substring with at most K distinct characters.
+ *
+ * Implement a function that returns the longest substring (and its length) containing at most k distinct characters.
+ *
+ * Example: longestSubstrKDistinct("aabacbebebe", 3) -> { length: 7, substring: "cbebebe" }
+ */
+
+function longestSubstrKDistinct(s, k) {
+  if (k <= 0 || s.length === 0) return { length: 0, substring: "" };
+  const counts = new Map();
+  let left = 0, bestLen = 0, bestStart = 0;
+  for (let right = 0; right < s.length; right++) {
+    counts.set(s[right], (counts.get(s[right]) || 0) + 1);
+    while (counts.size > k) {
+      const ch = s[left++];
+      const c = counts.get(ch) - 1;
+      if (c === 0) counts.delete(ch); else counts.set(ch, c);
+    }
+    if (right - left + 1 > bestLen) {
+      bestLen = right - left + 1;
+      bestStart = left;
+    }
+  }
+  return { length: bestLen, substring: s.slice(bestStart, bestStart + bestLen) };
+}
+
+// quick test
+// console.log(longestSubstrKDistinct("aabacbebebe", 3)); // { length: 7, substring: "cbebebe" }
