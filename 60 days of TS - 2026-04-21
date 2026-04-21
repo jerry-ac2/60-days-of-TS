@@ -1,0 +1,23 @@
+# TIL — 2026-04-21
+TypeScript's `satisfies` operator (since 4.9) lets you assert that a value conforms to a type without widening its inferred literal types.
+
+```ts
+type Config = {
+  mode: "development" | "production";
+  port: number;
+  debug?: boolean;
+};
+
+// Using a type annotation: literals widen to the declared type
+const cfgA: Config = { mode: "production", port: 8080 };
+// typeof cfgA.mode === string  (loses literal "production")
+
+// Using `satisfies`: keeps literal inference, still checked against Config
+const cfgB = { mode: "production", port: 8080 } satisfies Config;
+// typeof cfgB.mode === "production" (literal preserved)
+
+// `satisfies` still enforces shape:
+const bad = { mode: "prod", port: "8080" } satisfies Config; // Error: "prod" not allowed, port must be number
+```
+
+Use `satisfies` when you want strict shape checking but also preserve literal types for downstream narrowing or exhaustive checks.
