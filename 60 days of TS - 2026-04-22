@@ -1,0 +1,40 @@
+/**
+ * pLimit - simple concurrency limiter
+ * 2026-04-22
+ *
+ * Usage:
+ *   const limit = pLimit(3);
+ *   const task = () => fetch(...);
+ *   const promise = limit(task); // ensures at most 3 tasks run concurrently
+ *
+ * Accepts sync or async tasks: () => T | Promise<T>
+ */
+export function pLimit(concurrency: number) {
+  const max = Math.max(1, Math.floor(concurrency));
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  const next = () => {
+    if (active >= max || queue.length === 0) return;
+    const run = queue.shift()!;
+    run();
+  };
+
+  return function <T>(fn: () => PromiseLike<T> | T): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = () => {
+        active++;
+        Promise.resolve()
+          .then(fn)
+          .then(resolve, reject)
+          .finally(() => {
+            active--;
+            next();
+          });
+      };
+
+      if (active < max) run();
+      else queue.push(run);
+    });
+  };
+}
