@@ -1,0 +1,37 @@
+// 2026-04-23 — Daily coding journal: TypeScript utility function
+/**
+ * Deeply merges two plain objects immutably.
+ *
+ * - Recursively merges plain objects.
+ * - Arrays default to 'replace' but can 'concat'.
+ * - Non-plain values from source overwrite target.
+ *
+ * Example:
+ *   deepMerge({a:1, b:{x:1}}, {b:{y:2}, c:3})
+ *   -> {a:1, b:{x:1, y:2}, c:3}
+ *
+ * @param target - base object
+ * @param source - object to merge into base
+ * @param opts.arrayMerge - 'replace' | 'concat' (default 'replace')
+ */
+export function deepMerge<T extends Record<string, any>>(
+  target: T,
+  source: Partial<T>,
+  opts: { arrayMerge?: 'replace' | 'concat' } = {}
+): T {
+  const { arrayMerge = 'replace' } = opts;
+  const isPlain = (v: any) => v && typeof v === 'object' && !Array.isArray(v);
+  const out: any = Array.isArray(target) ? [...(target as any)] : { ...(target as any) };
+  for (const key of Object.keys(source || {})) {
+    const sv = (source as any)[key];
+    const tv = (target as any)[key];
+    if (Array.isArray(sv) && Array.isArray(tv)) {
+      out[key] = arrayMerge === 'concat' ? [...tv, ...sv] : [...sv];
+    } else if (isPlain(sv) && isPlain(tv)) {
+      out[key] = deepMerge(tv, sv, opts);
+    } else {
+      out[key] = sv;
+    }
+  }
+  return out;
+}
