@@ -1,0 +1,44 @@
+/**
+ * memoizeAsyncWithTTL
+ *
+ * Memoizes an async function (returns the same pending Promise on concurrent calls).
+ * Optional TTL (ms) per cached entry; expired entries are removed and recomputed.
+ * Optionally supply a keyResolver to control cache keys (defaults to JSON.stringify(args)).
+ *
+ * Example:
+ * const fetchUser = async (id: number) => fetch(`/u/${id}`).then(r=>r.json());
+ * const cachedFetch = memoizeAsyncWithTTL(fetchUser, 5000);
+ * await Promise.all([cachedFetch(1), cachedFetch(1)]); // single network call
+ */
+export function memoizeAsyncWithTTL<TArgs extends any[], TResult>(
+  fn: (...args: TArgs) => Promise<TResult>,
+  ttl = 0,
+  keyResolver?: (...args: TArgs) => string
+) {
+  const cache = new Map<string, { promise: Promise<TResult>; expires: number }>();
+  return async (...args: TArgs): Promise<TResult> => {
+    const key = keyResolver ? keyResolver(...args) : JSON.stringify(args);
+    const now = Date.now();
+    const entry = cache.get(key);
+    if (entry && (ttl <= 0 || entry.expires > now)) return entry.promise;
+
+    const rawPromise = fn(...args);
+    const wrapped = rawPromise.then(
+      (v) => v,
+      (err) => {
+        cache.delete(key); // allow retries on failure
+        throw err;
+      }
+    );
+    const expires = ttl > 0 ? now + ttl : Infinity;
+    cache.set(key, { promise: wrapped, expires });
+
+    if (ttl > 0) {
+      setTimeout(() => {
+        const e = cache.get(key);
+        if (e && e.expires <= Date.now()) cache.delete(key);
+      }, ttl + 50);
+    }
+    return wrapped;
+  };
+}
