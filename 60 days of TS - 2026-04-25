@@ -1,0 +1,31 @@
+/**
+ * 2026-04-25 — deepMerge
+ * Deeply merges source objects into a new object. Objects are merged recursively.
+ * Arrays and non-plain objects (Date, RegExp, class instances) are replaced by later values.
+ *
+ * Example:
+ *   deepMerge({a:1, b:{x:1}}, {b:{y:2}}) -> {a:1, b:{x:1, y:2}}
+ *
+ * @param objs - list of partial objects to merge (left-to-right)
+ * @returns a new merged object
+ */
+function isPlainObj(v: any): v is Record<string, any> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v) && v.constructor === Object;
+}
+
+export function deepMerge<T = any>(...objs: Array<Partial<T>>): T {
+  const out: any = {};
+  for (const o of objs) {
+    if (!o || typeof o !== 'object') continue;
+    for (const k of Object.keys(o as any)) {
+      const val = (o as any)[k];
+      const cur = out[k];
+      if (isPlainObj(cur) && isPlainObj(val)) {
+        out[k] = deepMerge(cur, val);
+      } else {
+        out[k] = val;
+      }
+    }
+  }
+  return out;
+}
