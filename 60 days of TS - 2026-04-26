@@ -1,0 +1,60 @@
+/**
+ * Retry an async function with exponential backoff and optional jitter.
+ *
+ * @template T
+ * @param fn - Async function to execute.
+ * @param options.maxAttempts - Maximum attempts (default 3).
+ * @param options.initialDelay - Initial delay in ms before first retry (default 200).
+ * @param options.factor - Backoff multiplier (default 2).
+ * @param options.maxDelay - Maximum delay in ms (default 10_000).
+ * @param options.jitter - Jitter factor [0..1] to randomize delays (default 0.25).
+ * @param options.onRetry - Optional callback called before each retry with (attempt, error, nextDelay).
+ * @param options.signal - Optional AbortSignal to cancel retries.
+ * @returns The resolved value of fn or throws the last error.
+ */
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  {
+    maxAttempts = 3,
+    initialDelay = 200,
+    factor = 2,
+    maxDelay = 10_000,
+    jitter = 0.25,
+    onRetry,
+    signal,
+  }: {
+    maxAttempts?: number;
+    initialDelay?: number;
+    factor?: number;
+    maxDelay?: number;
+    jitter?: number;
+    onRetry?: (attempt: number, error: unknown, nextDelay: number) => void;
+    signal?: AbortSignal;
+  } = {}
+): Promise<T> {
+  let attempt = 0;
+  let delay = initialDelay;
+  let lastErr: unknown;
+  while (++attempt <= maxAttempts) {
+    if (signal?.aborted) throw new Error('Aborted');
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxAttempts) break;
+      // apply jitter
+      const jitterOffset = (Math.random() * 2 - 1) * jitter * delay;
+      const nextDelay = Math.min(maxDelay, Math.max(0, Math.round(delay + jitterOffset)));
+      onRetry?.(attempt, err, nextDelay);
+      await new Promise<void>((res, rej) => {
+        const t = setTimeout(res, nextDelay);
+        signal?.addEventListener('abort', () => {
+          clearTimeout(t);
+          rej(new Error('Aborted'));
+        }, { once: true });
+      });
+      delay = Math.min(maxDelay, Math.round(delay * factor));
+    }
+  }
+  throw lastErr;
+}
