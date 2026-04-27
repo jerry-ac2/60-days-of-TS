@@ -1,0 +1,35 @@
+# 2026-04-27 — Today I Learned (TIL)
+
+TIL about the JS event loop: microtasks (Promise.then, queueMicrotask) run *after* the current stack but *before* macrotasks (setTimeout, setImmediate). Node has an extra priority: process.nextTick runs before Promise microtasks.
+
+```js
+console.log('start');
+
+setTimeout(() => console.log('macrotask: setTimeout'), 0);
+
+Promise.resolve().then(() => console.log('microtask: promise'));
+
+queueMicrotask(() => console.log('microtask: queueMicrotask'));
+
+if (typeof process !== 'undefined' && process.nextTick) {
+  process.nextTick(() => console.log('nextTick: process.nextTick (Node only)'));
+}
+
+console.log('end');
+
+/* Expected order in browser:
+start
+end
+microtask: promise
+microtask: queueMicrotask
+macrotask: setTimeout
+
+Expected order in Node:
+start
+end
+nextTick: process.nextTick (Node only)
+microtask: promise
+microtask: queueMicrotask
+macrotask: setTimeout
+*/
+```
