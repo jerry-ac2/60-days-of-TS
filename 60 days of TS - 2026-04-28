@@ -1,0 +1,26 @@
+```javascript
+/*
+TIL 2026-04-28: structuredClone vs JSON
+- structuredClone preserves Date, RegExp, Map, Set, BigInt, ArrayBuffer, TypedArrays and cyclic refs.
+- JSON.parse(JSON.stringify(...)) converts Dates to strings, throws on BigInt, and loses Maps/Sets/TypedArrays.
+- structuredClone is available in modern browsers and Node >= 17 (or use globalThis.structuredClone polyfills).
+*/
+const original = {
+  date: new Date("2020-01-01"),
+  big: 123n,
+  map: new Map([["a", 1]]),
+  set: new Set([2]),
+  buf: new Uint8Array([1,2,3])
+};
+
+const jsonClone = (() => {
+  try { return JSON.parse(JSON.stringify(original)); }
+  catch (e) { return `JSON clone error: ${e.message}`; }
+})();
+
+const structured = (typeof structuredClone === "function")
+  ? structuredClone(original)
+  : "structuredClone not available";
+
+console.log({ original, jsonClone, structured });
+```
