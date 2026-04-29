@@ -1,0 +1,66 @@
+/**
+ * debounce.ts
+ * Date: 2026-04-29
+ *
+ * Debounces a function and returns an async wrapper that resolves with the
+ * original function's return value. Includes cancel() and flush().
+ *
+ * @param fn - function to debounce
+ * @param wait - milliseconds to wait
+ * @param immediate - if true, invoke on leading edge
+ * @returns debounced function returning Promise<ReturnType<T>> & { cancel(): void; flush(): void }
+ *
+ * Example:
+ *   const save = debounce(async (data) => await api.save(data), 200);
+ *   await save({x:1}); // resolves after debounce (or immediately if leading)
+ */
+export function debounce<T extends (...a: any[]) => any>(
+  fn: T,
+  wait = 0,
+  immediate = false
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastThis: any;
+  let lastArgs: any[] = [];
+  let resolvers: ((v: ReturnType<T>) => void)[] = [];
+
+  const invoke = () => {
+    timer = null;
+    if (!immediate) {
+      const res = fn.apply(lastThis, lastArgs);
+      resolvers.forEach(r => r(res));
+      resolvers = [];
+    }
+  };
+
+  const wrapped = function (this: any, ...args: Parameters<T>) {
+    lastThis = this;
+    lastArgs = args;
+    if (timer) clearTimeout(timer);
+    const p = new Promise<ReturnType<T>>(resolve => resolvers.push(resolve));
+    if (immediate && !timer) {
+      const res = fn.apply(lastThis, lastArgs);
+      resolvers.forEach(r => r(res));
+      resolvers = [];
+    }
+    timer = setTimeout(invoke, wait);
+    return p;
+  };
+
+  (wrapped as any).cancel = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    resolvers = [];
+  };
+
+  (wrapped as any).flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      invoke();
+    }
+  };
+
+  return wrapped as typeof wrapped & { cancel(): void; flush(): void };
+}
