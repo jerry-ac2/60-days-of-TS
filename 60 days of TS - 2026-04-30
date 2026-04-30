@@ -1,0 +1,66 @@
+/**
+ * retryWithBackoff.ts
+ * Date: 2026-04-30
+ *
+ * Retry an async operation with exponential backoff, optional jitter and AbortSignal support.
+ *
+ * Example:
+ *   await retryWithBackoff(() => fetch(url), { attempts: 5, initialDelay: 200, jitter: true, signal });
+ */
+export type RetryOptions = {
+  attempts?: number;         // total attempts (default 3)
+  initialDelay?: number;     // ms (default 100)
+  factor?: number;           // exponential factor (default 2)
+  maxDelay?: number;         // cap delay ms (default 10000)
+  jitter?: boolean;          // randomize delay up to ±50% (default false)
+  onRetry?: (err: unknown, attempt: number, delay: number) => void;
+  signal?: AbortSignal;
+};
+
+function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+    const t = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(t);
+      reject(new DOMException('Aborted', 'AbortError'));
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  {
+    attempts = 3,
+    initialDelay = 100,
+    factor = 2,
+    maxDelay = 10000,
+    jitter = false,
+    onRetry,
+    signal,
+  }: RetryOptions = {}
+): Promise<T> {
+  let attempt = 0;
+  let lastErr: unknown;
+  while (++attempt <= attempts) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === attempts) break;
+      let delay = Math.min(maxDelay, initialDelay * Math.pow(factor, attempt - 1));
+      if (jitter) {
+        const rand = 0.5 + Math.random(); // range [0.5, 1.5)
+        delay = Math.round(delay * rand);
+      }
+      onRetry?.(err, attempt, delay);
+      await sleep(delay, signal);
+    }
+  }
+  throw lastErr;
+}
