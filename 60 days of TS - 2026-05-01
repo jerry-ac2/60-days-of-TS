@@ -1,0 +1,29 @@
+/**
+ * 2026-05-01 — mergeDeep
+ *
+ * Recursively merges plain objects. Arrays and non-plain values are replaced
+ * by the rightmost value. Does not mutate inputs.
+ *
+ * Example:
+ *   mergeDeep({a:1, b:{x:2}}, {b:{y:3}, c:4})
+ *   -> {a:1, b:{x:2, y:3}, c:4}
+ */
+export function mergeDeep<T = any>(...objs: Array<Partial<T>>): T {
+  const isPlain = (v: any) =>
+    v !== null && typeof v === "object" && !Array.isArray(v);
+  const mergeTwo = (a: any, b: any): any => {
+    if (isPlain(a) && isPlain(b)) {
+      const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+      const out: any = {};
+      keys.forEach((k) => {
+        if (k in a && k in b) out[k] = mergeTwo(a[k], b[k]);
+        else if (k in b) out[k] = b[k];
+        else out[k] = a[k];
+      });
+      return out;
+    }
+    // arrays and primitives: replace with right-hand value (shallow copy arrays)
+    return Array.isArray(b) ? b.slice() : b;
+  };
+  return objs.reduce((acc, cur) => mergeTwo(acc, cur), {}) as T;
+}
