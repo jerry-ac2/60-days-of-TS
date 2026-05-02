@@ -1,0 +1,58 @@
+/**
+ * memoizeAsync - Memoize an async function with in-flight deduplication and optional TTL.
+ *
+ * Usage:
+ *   const memoized = memoizeAsync(fetchUserById, { ttl: 5000 });
+ *   await memoized(1); // cached for 5s; concurrent calls share the same promise
+ *
+ * Options:
+ *  - ttl: milliseconds to keep a successful result (0 = forever)
+ *  - keyResolver: (...args) => string to build cache keys (defaults to JSON.stringify)
+ *
+ * Returned function has methods:
+ *  - clear(): void            // clear entire cache
+ *  - clearKey(...args): void  // clear cache for specific args
+ */
+export function memoizeAsync<T, A extends any[]>(
+  fn: (...args: A) => Promise<T>,
+  opts?: { ttl?: number; keyResolver?: (...args: A) => string }
+) {
+  const ttl = opts?.ttl ?? 0;
+  const keyResolver = opts?.keyResolver ?? ((...args: A) => JSON.stringify(args));
+  type Entry = { promise: Promise<T>; ts: number };
+  const cache = new Map<string, Entry>();
+
+  const wrapped = (...args: A) => {
+    const key = keyResolver(...args);
+    const now = Date.now();
+    const existing = cache.get(key);
+
+    if (existing) {
+      if (ttl === 0 || now - existing.ts < ttl) return existing.promise;
+      cache.delete(key);
+    }
+
+    const p = fn(...args).then(
+      (res) => {
+        // keep the resolved promise in cache with timestamp
+        cache.set(key, { promise: Promise.resolve(res), ts: Date.now() });
+        return res;
+      },
+      (err) => {
+        // remove failed entries to allow retry
+        cache.delete(key);
+        throw err;
+      }
+    );
+
+    cache.set(key, { promise: p, ts: now });
+    return p;
+  };
+
+  (wrapped as any).clear = () => cache.clear();
+  (wrapped as any).clearKey = (...args: A) => cache.delete(keyResolver(...args));
+  return wrapped as ((...args: A) => Promise<T>) & {
+    clear(): void;
+    clearKey(...args: A): void;
+  };
+}
