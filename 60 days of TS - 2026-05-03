@@ -1,0 +1,25 @@
+# TIL — 2026-05-03: structuredClone for safe deep copies
+
+structuredClone is a native, fast deep-clone available in modern browsers and Node. It preserves Dates, RegExps, Maps, Sets, ArrayBuffers, etc., but not functions or custom prototype methods. Supports Transferables for zero-copy transfers.
+
+```js
+// simple deep clone
+const original = {d: new Date(), m: new Map([['x',1]])};
+const copy = structuredClone(original);
+console.log(copy.d instanceof Date, copy.m instanceof Map); // true, true
+
+// functions/prototype are not preserved
+const proto = {greet(){return 'hi'}};
+const obj = Object.create(proto);
+obj.fn = ()=>42;
+const cloned = structuredClone(obj);
+console.log(cloned.greet); // undefined
+console.log(typeof cloned.fn); // 'undefined'
+
+// Transferable example (zero-copy for ArrayBuffer)
+const buf = new ArrayBuffer(1024);
+const bufClone = structuredClone(buf, {transfer: [buf]});
+console.log(buf.byteLength, bufClone.byteLength); // 0, 1024
+```
+
+Fallback: use JSON.parse(JSON.stringify(x)) when structuredClone isn't available (loses Dates/Maps/undefined/functions).
