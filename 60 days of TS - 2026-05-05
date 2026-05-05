@@ -1,0 +1,41 @@
+/**
+ * memoizeAsync - memoize an async function (Promise-returning) with optional TTL and custom key resolver.
+ *
+ * @param fn - async function to memoize
+ * @param options.ttl - time-to-live in ms for cached entries (omit for no expiry)
+ * @param options.keyResolver - function to produce a cache key from arguments (default: JSON.stringify)
+ * @returns memoized function with methods: clearAll() and deleteKey(key)
+ *
+ * Example:
+ * const fetchUser = async (id: number) => fetch(`/u/${id}`).then(r => r.json());
+ * const memoFetch = memoizeAsync(fetchUser, { ttl: 5000 });
+ * await memoFetch(1); // cached for 5s
+ */
+export function memoizeAsync<T extends (...args: any[]) => Promise<any>>(
+  fn: T,
+  options?: { ttl?: number; keyResolver?: (...args: Parameters<T>) => string }
+): T & { clearAll(): void; deleteKey(key: string): boolean } {
+  const cache = new Map<string, { promise: ReturnType<T>; expireAt?: number }>();
+  const ttl = options?.ttl;
+  const keyResolver = options?.keyResolver ?? ((...a: Parameters<T>) => JSON.stringify(a));
+
+  const wrapped = ((...args: Parameters<T>): ReturnType<T> => {
+    const key = keyResolver(...args);
+    const now = Date.now();
+    const entry = cache.get(key);
+    if (entry && (entry.expireAt === undefined || entry.expireAt > now)) return entry.promise;
+    const p = fn(...args);
+    cache.set(key, { promise: p, expireAt: ttl ? now + ttl : undefined });
+    // If the promise rejects, remove from cache so subsequent calls can retry
+    p.catch(() => {
+      const cur = cache.get(key);
+      if (cur && cur.promise === p) cache.delete(key);
+    });
+    return p;
+  }) as T & { clearAll(): void; deleteKey(key: string): boolean };
+
+  wrapped.clearAll = () => cache.clear();
+  wrapped.deleteKey = (key: string) => cache.delete(key);
+
+  return wrapped;
+}
