@@ -1,0 +1,20 @@
+# Today I Learned — 2026-05-06
+
+Tip: use structuredClone for safe, fast deep clones of many built-ins (Date, RegExp, Map, Set, ArrayBuffer, TypedArray, Blob, etc.). It does not clone functions, DOM nodes, or preserve custom class prototypes — use a custom serializer or library for those cases.
+
+```js
+// Example deep-clone helper with graceful fallback
+// structuredClone is available in modern browsers & Node; fallback uses JSON (limited)
+function deepClone<T>(value: T): T {
+  if (typeof structuredClone === "function") return structuredClone(value);
+  // JSON fallback: works for plain objects/arrays with JSON-safe values
+  return JSON.parse(JSON.stringify(value));
+}
+
+/*
+Usage:
+  const original = { d: new Date(), s: new Set([1,2]), n: null };
+  const copy = deepClone(original);
+Note: copy will preserve Date/Set with structuredClone, but fallback will not.
+*/
+```
