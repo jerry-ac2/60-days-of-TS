@@ -1,0 +1,35 @@
+/**
+ * asyncPool - run async tasks with limited concurrency, preserving input order.
+ *
+ * @param items Array of input items
+ * @param iterator Async function applied to each item (item, index) => Promise<R>
+ * @param concurrency Max number of concurrently running promises (>=1)
+ * @returns Promise resolving to array of results in same order as items
+ *
+ * Example:
+ *   const results = await asyncPool(urls, async (u) => fetch(u).then(r => r.text()), 5);
+ */
+export async function asyncPool<T, R>(
+  items: T[],
+  iterator: (item: T, index: number) => Promise<R>,
+  concurrency = 4
+): Promise<R[]> {
+  const n = items.length;
+  if (n === 0) return [];
+  const limit = Math.max(1, Math.floor(concurrency));
+  const results: R[] = new Array(n);
+  let i = 0;
+  const workers: Promise<void>[] = [];
+
+  const worker = async () => {
+    while (true) {
+      const idx = i++;
+      if (idx >= n) return;
+      results[idx] = await iterator(items[idx], idx);
+    }
+  };
+
+  for (let w = 0; w < Math.min(limit, n); w++) workers.push(worker());
+  await Promise.all(workers);
+  return results;
+}
