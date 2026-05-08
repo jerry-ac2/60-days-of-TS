@@ -1,0 +1,51 @@
+/**
+ * 2026-05-08 — retryAsync
+ *
+ * Retry an async function with exponential backoff and optional jitter.
+ *
+ * @param fn - async function to invoke
+ * @param opts.retries - number of retries (default 3)
+ * @param opts.delay - base delay in ms (default 100)
+ * @param opts.factor - exponential factor (default 2)
+ * @param opts.maxDelay - maximum delay in ms (default 10000)
+ * @param opts.jitter - apply jitter to delay (default true)
+ * @param opts.onRetry - optional callback called before each retry: (err, attempt, nextDelay) => void
+ */
+type RetryOptions = {
+  retries?: number;
+  delay?: number;
+  factor?: number;
+  maxDelay?: number;
+  jitter?: boolean;
+  onRetry?: (err: unknown, attempt: number, nextDelay: number) => void;
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export async function retryAsync<T>(
+  fn: () => Promise<T>,
+  opts: RetryOptions = {}
+): Promise<T> {
+  const {
+    retries = 3,
+    delay = 100,
+    factor = 2,
+    maxDelay = 10000,
+    jitter = true,
+    onRetry,
+  } = opts;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === retries) throw err;
+      let next = Math.min(delay * Math.pow(factor, attempt), maxDelay);
+      if (jitter) next = Math.floor(next * (0.5 + Math.random() * 0.5));
+      onRetry?.(err, attempt + 1, next);
+      await sleep(next);
+    }
+  }
+  // unreachable, but satisfy type checker
+  throw new Error("retryAsync: exhausted retries");
+}
