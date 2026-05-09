@@ -1,0 +1,76 @@
+/**
+ * Debounce with Promise support and optional leading call.
+ * Date: 2026-05-09
+ *
+ * - Returns a debounced function that returns a Promise resolving to the wrapped function's return.
+ * - Options: wait milliseconds, leading true to call immediately on first invocation.
+ * - Methods: .cancel() clears pending call (resolves pending promises with undefined),
+ *            .flush() invokes pending call immediately.
+ *
+ * Example:
+ *   const debounced = debounce(async (q)=>fetchSearch(q), 300);
+ *   await debounced('term'); // resolves when fn runs
+ */
+type Debounced<T extends (...args: any[]) => any> =
+  ((...args: Parameters<T>) => Promise<ReturnType<T>>) & { cancel: () => void; flush: () => void };
+
+export function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  wait = 200,
+  leading = false
+): Debounced<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let lastArgs: Parameters<T> | undefined;
+  let resolvers: ((v: ReturnType<T> | undefined) => void)[] = [];
+
+  const invoke = () => {
+    if (lastArgs === undefined) return;
+    const result = fn(...(lastArgs as Parameters<T>));
+    const pending = resolvers;
+    resolvers = [];
+    lastArgs = undefined;
+    pending.forEach(r => r(result as ReturnType<T>));
+  };
+
+  const debounced = (async (...args: Parameters<T>) => {
+    return new Promise<ReturnType<T> | undefined>(resolve => {
+      lastArgs = args;
+      resolvers.push(resolve);
+
+      if (leading && !timer) {
+        // call immediately and clear pending promise queue with result
+        const res = fn(...(lastArgs as Parameters<T>));
+        const pending = resolvers;
+        resolvers = [];
+        lastArgs = undefined;
+        pending.forEach(r => r(res as ReturnType<T>));
+        return;
+      }
+
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = undefined;
+        invoke();
+      }, wait);
+    });
+  }) as Debounced<T>;
+
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+    const pending = resolvers;
+    resolvers = [];
+    lastArgs = undefined;
+    pending.forEach(r => r(undefined));
+  };
+
+  debounced.flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
+      invoke();
+    }
+  };
+
+  return debounced;
+}
