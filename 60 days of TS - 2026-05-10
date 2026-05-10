@@ -1,0 +1,35 @@
+/**
+ * promiseWithTimeout
+ *
+ * Wraps a Promise and rejects with a TimeoutError if it doesn't settle within `ms` milliseconds.
+ *
+ * @date 2026-05-10
+ * @param p Promise<T> - the original promise to race against the timer
+ * @param ms number - timeout in milliseconds
+ * @param message string - optional message for the TimeoutError
+ * @returns Promise<T> - resolves/rejects like the original promise, or rejects with TimeoutError on timeout
+ *
+ * Usage:
+ *   await promiseWithTimeout(fetch(url), 5000, 'Fetch timed out');
+ */
+export class TimeoutError extends Error {
+  constructor(message = 'Operation timed out') {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+export function promiseWithTimeout<T>(p: Promise<T>, ms: number, message?: string): Promise<T> {
+  if (ms <= 0) return p;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new TimeoutError(message)), ms);
+  });
+  // Race the original promise against the timeout; ensure timer cleared on settle.
+  return Promise.race([p, timeout]).finally(() => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  }) as Promise<T>;
+}
