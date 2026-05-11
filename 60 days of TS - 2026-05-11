@@ -1,0 +1,31 @@
+/**
+ * asyncMemoize - memoize async functions (Promise-returning) with optional TTL.
+ *
+ * Usage:
+ *   const fetchUser = asyncMemoize(async (id: string) => fetch(...).then(r => r.json()), 5000);
+ *   await fetchUser("123"); // cached for 5s
+ *
+ * Notes:
+ * - Uses JSON.stringify on arguments to form cache keys (suitable for serializable args).
+ * - Concurrent calls with same args share the same in-flight Promise.
+ * - If the Promise rejects, the cache entry is cleared so future calls can retry.
+ */
+export function asyncMemoize<TArgs extends any[], R>(
+  fn: (...args: TArgs) => Promise<R>,
+  ttlMs = Infinity
+) {
+  const cache = new Map<string, { ts: number; promise: Promise<R> }>();
+  return (...args: TArgs): Promise<R> => {
+    const key = JSON.stringify(args);
+    const now = Date.now();
+    const entry = cache.get(key);
+    if (entry && now - entry.ts < ttlMs) return entry.promise;
+    const promise = fn(...args).catch(err => {
+      // remove failed entry so callers can retry
+      if (cache.get(key)?.promise === promise) cache.delete(key);
+      throw err;
+    });
+    cache.set(key, { ts: now, promise });
+    return promise;
+  };
+}
