@@ -1,0 +1,41 @@
+/**
+ * deepMerge(...objects): Recursively merges plain objects. Arrays are concatenated.
+ *
+ * - Plain objects are merged deeply.
+ * - Arrays are concatenated (shallowly).
+ * - Primitive values / non-plain objects are overwritten by later arguments.
+ *
+ * Example:
+ *   const a = { x: 1, y: { z: [1] } };
+ *   const b = { y: { z: [2], w: 3 }, k: 4 };
+ *   deepMerge(a, b) // -> { x:1, y:{ z:[1,2], w:3 }, k:4 }
+ *
+ * Notes:
+ * - Functions, Dates, Maps, Sets are treated as non-plain and get overwritten.
+ */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object' && !Array.isArray(v) && v.constructor === Object;
+}
+
+export function deepMerge<T = any>(...objects: any[]): T {
+  const result: Record<string, any> = {};
+  for (const obj of objects) {
+    if (!obj || typeof obj !== 'object') continue;
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      const prev = result[key];
+      if (Array.isArray(val) && Array.isArray(prev)) {
+        result[key] = prev.concat(val);
+      } else if (Array.isArray(val)) {
+        result[key] = val.slice();
+      } else if (isPlainObject(val) && isPlainObject(prev)) {
+        result[key] = deepMerge(prev, val);
+      } else if (isPlainObject(val)) {
+        result[key] = deepMerge({}, val);
+      } else {
+        result[key] = val;
+      }
+    }
+  }
+  return result as T;
+}
