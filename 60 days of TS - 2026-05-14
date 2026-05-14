@@ -1,0 +1,52 @@
+/**
+ * memoizeWithTTL(fn, ttlMs)
+ * - Memoizes a function's results for ttlMs milliseconds.
+ * - Supports sync and async functions (caches resolved values).
+ * - .clear() clears entire cache or a specific arg-set.
+ *
+ * Limitations: uses JSON.stringify for keys (no circular args).
+ *
+ * Example:
+ * const fetchUser = async (id: number) => fetch(`/u/${id}`).then(r=>r.json());
+ * const cached = memoizeWithTTL(fetchUser, 5000);
+ * await cached(1); // cached for 5s
+ */
+export function memoizeWithTTL<T extends (...args: any[]) => any>(fn: T, ttlMs: number) {
+  type Entry = { value?: any; expires: number; pending?: Promise<any> };
+  const cache = new Map<string, Entry>();
+  const isPromise = (v: any): v is Promise<any> => v && typeof v.then === 'function';
+
+  const wrapper = function (...args: Parameters<T>): ReturnType<T> {
+    const key = JSON.stringify(args);
+    const now = Date.now();
+    const existing = cache.get(key);
+    if (existing && existing.expires > now) {
+      return (existing.pending ?? existing.value) as ReturnType<T>;
+    }
+
+    const result = fn(...args);
+    if (isPromise(result)) {
+      const pending = (result as Promise<any>)
+        .then(res => {
+          cache.set(key, { value: res, expires: Date.now() + ttlMs });
+          return res;
+        })
+        .catch(err => {
+          cache.delete(key);
+          throw err;
+        });
+      cache.set(key, { expires: Date.now() + ttlMs, pending });
+      return pending as ReturnType<T>;
+    } else {
+      cache.set(key, { value: result, expires: Date.now() + ttlMs });
+      return result as ReturnType<T>;
+    }
+  } as T & { clear(args?: Parameters<T>): void };
+
+  (wrapper as any).clear = (args?: Parameters<T>) => {
+    if (args === undefined) cache.clear();
+    else cache.delete(JSON.stringify(args));
+  };
+
+  return wrapper;
+}
