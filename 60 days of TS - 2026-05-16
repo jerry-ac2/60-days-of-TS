@@ -1,0 +1,35 @@
+/**
+ * pMap: map over an iterable with a concurrency limit, preserving input order.
+ *
+ * @example
+ * const urls = ['a','b','c'];
+ * const results = await pMap(urls, async (u) => fetch(u).then(r => r.text()), { concurrency: 2 });
+ *
+ * @param iterable - any iterable of input items
+ * @param mapper - async or sync mapping function (item, index) => R | Promise<R>
+ * @param options.concurrency - max number of concurrent mapper invocations (default 4)
+ * @returns Promise resolving to an array of mapped results in the original order
+ */
+export async function pMap<T, R>(
+  iterable: Iterable<T>,
+  mapper: (item: T, index: number) => Promise<R> | R,
+  options: { concurrency?: number } = {}
+): Promise<R[]> {
+  const items = Array.from(iterable);
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+  const concurrency = Math.max(1, options.concurrency ?? 4);
+
+  const worker = async () => {
+    while (true) {
+      const i = idx++;
+      if (i >= items.length) return;
+      results[i] = await mapper(items[i], i) as R;
+    }
+  };
+
+  const runners: Promise<void>[] = [];
+  for (let i = 0; i < Math.min(concurrency, items.length); i++) runners.push(worker());
+  await Promise.all(runners);
+  return results;
+}
