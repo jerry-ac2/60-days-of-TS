@@ -1,0 +1,60 @@
+/**
+ * debounce.ts — 2026-05-17
+ *
+ * Debounce a function call, with cancel and flush controls.
+ *
+ * @param fn - function to debounce
+ * @param wait - milliseconds to wait before invoking
+ * @param immediate - if true, invoke on the leading edge
+ * @returns debounced function with .cancel() and .flush()
+ */
+export function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  wait = 0,
+  immediate = false
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let lastArgs: Parameters<T> | null = null
+  let lastThis: any = null
+  let result: ReturnType<T> | undefined
+
+  const invoke = () => {
+    timer = null
+    if (!immediate && lastArgs) {
+      result = fn.apply(lastThis, lastArgs)
+      lastArgs = lastThis = null
+    }
+  }
+
+  const debounced = function (this: any, ...args: Parameters<T>) {
+    lastArgs = args
+    lastThis = this
+    const callNow = immediate && !timer
+
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(invoke, wait)
+
+    if (callNow) {
+      result = fn.apply(lastThis, lastArgs)
+      lastArgs = lastThis = null
+    }
+
+    return result
+  } as T & { cancel: () => void; flush: () => ReturnType<T> | undefined }
+
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer)
+    timer = null
+    lastArgs = lastThis = null
+  }
+
+  debounced.flush = () => {
+    if (timer) {
+      clearTimeout(timer)
+      invoke()
+    }
+    return result
+  }
+
+  return debounced
+}
