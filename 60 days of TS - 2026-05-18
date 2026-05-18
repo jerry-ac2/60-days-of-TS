@@ -1,0 +1,36 @@
+# TIL — structuredClone (2026-05-18)
+
+structuredClone is a native deep-clone API that preserves many built-in types (Date, RegExp, Map, Set, ArrayBuffer, TypedArrays, BigInt, etc.) and supports transfer of ArrayBuffers to avoid copying. It's safer and richer than JSON.parse(JSON.stringify(...)) and is available in modern browsers and Node 17+.
+
+```js
+// Example usage
+const original = {
+  num: 42,
+  date: new Date(),
+  map: new Map([['a', 1]]),
+  set: new Set([1,2,3]),
+  buf: new ArrayBuffer(8)
+};
+
+// basic deep clone (copies supported types)
+const clone = structuredClone(original);
+console.log(clone.date instanceof Date); // true
+console.log(clone.map.get('a')); // 1
+
+// transfer ArrayBuffer (moved, not copied)
+const buf = new ArrayBuffer(16);
+const view = new Uint8Array(buf);
+view[0] = 255;
+const { transferred, remaining } = (() => {
+  const obj = { buf };
+  const transferredObj = structuredClone(obj, { transfer: [buf] });
+  return { transferred: transferredObj, remaining: obj };
+})();
+console.log(transferred.buf.byteLength); // 16
+console.log(remaining.buf.byteLength); // 0 (buffer transferred)
+
+// Caveats:
+// - Functions, DOM nodes, and many host objects are not cloneable.
+// - structuredClone preserves many built-ins but not arbitrary prototypes.
+// - Use when you need robust deep cloning or to send data to workers.
+```
