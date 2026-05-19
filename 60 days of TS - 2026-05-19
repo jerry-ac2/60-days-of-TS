@@ -1,0 +1,24 @@
+# 2026-05-19 — Today I Learned: structuredClone and Transferables
+
+- structuredClone(value[, options]) performs a deep clone (including circular refs) of many built-ins (Date, Map, Set, RegExp, BigInt, Error, etc.).
+- It does NOT clone functions or DOM nodes (those will throw).
+- You can transfer ownership of Transferable objects (like ArrayBuffer, MessagePort) to avoid copying.
+
+```js
+// Deep clone example:
+const original = { d: new Date(), s: new Set([1,2]), self: null };
+original.self = original;
+const copy = structuredClone(original);
+console.log(copy.d instanceof Date, copy.self === copy); // true, true
+
+// Transfer ArrayBuffer (neuters source)
+const buf = new ArrayBuffer(8);
+const view = new Uint8Array(buf);
+view[0] = 42;
+const cloned = structuredClone(buf, { transfer: [buf] });
+console.log(cloned.byteLength, buf.byteLength); // 8, 0 (source detached)
+
+// Caveats:
+// - Functions and many host/DOM objects will throw when cloning.
+// - Use transfer for zero-copy when passing large buffers between contexts.
+```
