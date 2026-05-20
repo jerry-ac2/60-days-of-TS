@@ -1,0 +1,34 @@
+# 2026-05-20 — TIL: use AbortController.signal with addEventListener to auto-clean listeners
+
+A concise pattern to attach DOM/event listeners that can be cancelled in one call (avoids manual removeEventListener bookkeeping).
+
+- addEventListener accepts an options object with `signal` (AbortSignal).
+- Calling `controller.abort()` removes all listeners registered with that signal.
+
+```js
+// Attach multiple listeners and cancel them together
+const controller = new AbortController();
+const { signal } = controller;
+
+button.addEventListener('click', onClick, { signal });
+window.addEventListener('resize', onResize, { signal });
+
+// Later: remove all of them in one go
+controller.abort(); // all listeners registered with this signal are removed
+
+function onClick(e) {
+  console.log('clicked', e.target);
+}
+function onResize() {
+  console.log('resized');
+}
+
+// Useful for components: abort on unmount/cleanup
+function mountComponent(el) {
+  const ctrl = new AbortController();
+  el.addEventListener('mousemove', () => {}, { signal: ctrl.signal });
+  return () => ctrl.abort(); // call during unmount
+}
+```
+
+Note: widely supported in modern browsers; for older environments, polyfill or manual removeEventListener is needed.
