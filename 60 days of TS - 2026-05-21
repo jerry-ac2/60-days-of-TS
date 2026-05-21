@@ -1,0 +1,53 @@
+/**
+ * memoizeAsync - caches results (and in-flight promises) of an async function.
+ *
+ * Usage:
+ * const memoized = memoizeAsync(async (id) => fetchData(id), { ttl: 60000 });
+ * await memoized.fn(1); // cached for ttl ms; concurrent calls share the same Promise
+ *
+ * Options:
+ * - ttl: milliseconds to keep a successful result cached (0 = no expiry; undefined = infinite)
+ * - key: custom key builder for args (defaults to JSON.stringify)
+ *
+ * The returned object has:
+ * - fn: the memoized async function
+ * - clear(): clears entire cache
+ * - delete(...args): remove cached entry for given args
+ */
+export function memoizeAsync<TArgs extends any[], R>(
+  fn: (...args: TArgs) => Promise<R>,
+  options?: { ttl?: number; key?: (...args: TArgs) => string }
+) {
+  const ttl = options?.ttl;
+  const makeKey = options?.key ?? ((...a: TArgs) => JSON.stringify(a));
+  type Entry = { p: Promise<R>; expires?: number };
+  const cache = new Map<string, Entry>();
+
+  const wrapped = (...args: TArgs) => {
+    const k = makeKey(...args);
+    const now = Date.now();
+    const e = cache.get(k);
+    if (e && (e.expires === undefined || e.expires > now)) return e.p;
+    const p = fn(...args).then(
+      (res) => res,
+      (err) => {
+        // On rejection, remove cached entry so retries can happen
+        if (cache.get(k)?.p === p) cache.delete(k);
+        throw err;
+      }
+    );
+    cache.set(k, { p, expires: ttl === undefined ? undefined : now + (ttl ?? 0) });
+    return p;
+  };
+
+  return {
+    fn: wrapped,
+    clear: () => cache.clear(),
+    delete: (...args: TArgs) => cache.delete(makeKey(...args)),
+    has: (...args: TArgs) => {
+      const k = makeKey(...args);
+      const e = cache.get(k);
+      return !!e && (e.expires === undefined || e.expires > Date.now());
+    },
+  };
+}
