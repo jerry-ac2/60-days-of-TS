@@ -1,0 +1,45 @@
+/**
+ * Daily Coding Journal — 2026-05-22
+ *
+ * memoizeAsync: memoizes an async function with TTL and concurrent-call de-duplication.
+ *
+ * Usage:
+ *   const cached = memoizeAsync(asyncFn, { ttl: 5000 });
+ *   await cached(arg1, arg2);
+ *
+ * Options:
+ *   ttl: milliseconds to keep a successful result (default: Infinity)
+ *   keyFn: custom function to serialize args into cache key (default: JSON.stringify)
+ */
+export function memoizeAsync<T extends any[], R>(
+  fn: (...args: T) => Promise<R>,
+  opts?: { ttl?: number; keyFn?: (...args: T) => string }
+) {
+  const ttl = opts?.ttl ?? Infinity;
+  const keyFn = opts?.keyFn ?? ((...a: T) => {
+    try { return JSON.stringify(a); } catch { return String(a); }
+  });
+  const cache = new Map<string, { promise: Promise<R>; expiresAt: number }>();
+
+  return (...args: T): Promise<R> => {
+    const key = keyFn(...args);
+    const now = Date.now();
+    const entry = cache.get(key);
+
+    if (entry && entry.expiresAt > now) return entry.promise;
+
+    const p = fn(...args)
+      .then((res) => {
+        // keep cached until expiresAt — already set below
+        return res;
+      })
+      .catch((err) => {
+        // on rejection, remove cache so callers can retry
+        if (cache.get(key)?.promise === p) cache.delete(key);
+        throw err;
+      });
+
+    cache.set(key, { promise: p, expiresAt: now + ttl });
+    return p;
+  };
+}
