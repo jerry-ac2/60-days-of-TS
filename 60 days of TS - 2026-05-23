@@ -1,0 +1,41 @@
+/**
+ * TIL 2026-05-23 — Deduplicate concurrent async calls by caching in-flight Promises.
+ * Use a Map keyed by arguments (or a custom keyFn). If a call with the same key is already
+ * running, return its Promise instead of starting a duplicate request.
+ *
+ * Options:
+ *  - keyFn: custom serializer for arguments
+ *  - cacheResolved: keep resolved value for future sync returns
+ */
+export function memoizeInFlight<T extends any[], R>(
+  fn: (...args: T) => Promise<R>,
+  opts?: { keyFn?: (...args: T) => string; cacheResolved?: boolean }
+) {
+  const inFlight = new Map<string, Promise<R>>();
+  const resolved = new Map<string, R>();
+  return (...args: T): Promise<R> => {
+    const key = opts?.keyFn ? opts.keyFn(...args) : JSON.stringify(args);
+    if (opts?.cacheResolved && resolved.has(key)) return Promise.resolve(resolved.get(key) as R);
+    if (inFlight.has(key)) return inFlight.get(key) as Promise<R>;
+    const p = fn(...args).then(
+      (res) => {
+        inFlight.delete(key);
+        if (opts?.cacheResolved) resolved.set(key, res);
+        return res;
+      },
+      (err) => {
+        inFlight.delete(key);
+        throw err;
+      }
+    );
+    inFlight.set(key, p);
+    return p;
+  };
+}
+
+/*
+Usage example:
+const fetchUser = memoizeInFlight((id: number) => fetch(`/user/${id}`).then(r => r.json()));
+// concurrent calls:
+Promise.all([fetchUser(1), fetchUser(1)]) // only one network request
+*/
