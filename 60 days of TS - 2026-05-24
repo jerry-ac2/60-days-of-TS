@@ -1,0 +1,52 @@
+/**
+ * retryAsync - Retry an async function with delay, backoff, jitter, and hooks.
+ *
+ * @example
+ * const result = await retryAsync(() => fetch(url), { attempts: 5, delay: 200, backoff: 2 });
+ *
+ * @param fn Async function to invoke
+ * @param options {
+ *   attempts: number,        // max attempts (default 3)
+ *   delay: number,           // initial delay in ms between retries (default 100)
+ *   backoff: number,         // multiplier applied to delay after each failure (default 1.5)
+ *   jitter: boolean,         // randomize delay ±25% (default true)
+ *   onRetry?: (err, attempt) => void // hook called after each failed attempt
+ * }
+ * @returns value of fn() or throws last error
+ */
+export async function retryAsync<T>(
+  fn: () => Promise<T>,
+  options?: Partial<{
+    attempts: number;
+    delay: number;
+    backoff: number;
+    jitter: boolean;
+    onRetry: (err: unknown, attempt: number) => void;
+  }>
+): Promise<T> {
+  const {
+    attempts = 3,
+    delay = 100,
+    backoff = 1.5,
+    jitter = true,
+    onRetry,
+  } = options || {};
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let attempt = 0;
+  let lastErr: unknown;
+  let curDelay = delay;
+  while (attempt < attempts) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      attempt++;
+      if (attempt >= attempts) break;
+      onRetry?.(err, attempt);
+      const jitterFactor = jitter ? (0.75 + Math.random() * 0.5) : 1; // ±25%
+      await sleep(Math.max(0, Math.round(curDelay * jitterFactor)));
+      curDelay *= backoff;
+    }
+  }
+  throw lastErr;
+}
