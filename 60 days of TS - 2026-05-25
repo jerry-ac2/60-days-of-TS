@@ -1,0 +1,50 @@
+/**
+ * asyncRetry: Retry an async operation with exponential backoff and optional jitter.
+ *
+ * @template T
+ * @param fn - function returning a Promise<T>
+ * @param opts - options:
+ *   retries: max retry attempts (default 3)
+ *   delay: initial delay in ms (default 100)
+ *   factor: exponential backoff factor (default 2)
+ *   jitter: boolean to add random jitter up to delay (default true)
+ *   shouldRetry: (err) => boolean to decide whether to retry (default: always true)
+ *   onRetry: (err, attempt) => void hook called before next attempt
+ * @returns Promise<T>
+ *
+ * Example:
+ *   await asyncRetry(() => fetch(url), { retries: 5, delay: 200, jitter: true })
+ */
+export async function asyncRetry<T>(
+  fn: () => Promise<T>,
+  {
+    retries = 3,
+    delay = 100,
+    factor = 2,
+    jitter = true,
+    shouldRetry = () => true,
+    onRetry,
+  }: {
+    retries?: number;
+    delay?: number;
+    factor?: number;
+    jitter?: boolean;
+    shouldRetry?: (err: any) => boolean;
+    onRetry?: (err: any, attempt: number) => void;
+  } = {}
+): Promise<T> {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= retries || !shouldRetry(err)) throw err;
+      attempt++;
+      onRetry?.(err, attempt);
+      const base = delay * Math.pow(factor, attempt - 1);
+      const jitterMs = jitter ? Math.random() * base : 0;
+      await wait(base + jitterMs);
+    }
+  }
+}
