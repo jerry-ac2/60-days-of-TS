@@ -1,0 +1,48 @@
+# 2026-05-26 — Today I Learned: WeakRef + FinalizationRegistry for value caches
+
+Sometimes you want a cache keyed by strings but you don't want cached values to be kept alive forever. Use WeakRef for stored values and FinalizationRegistry to clean up entries when the value is GC'd.
+
+```js
+// WeakValueCache: keys (strings) -> values (objects)
+// Values are held weakly; when GC'd the entry is removed.
+class WeakValueCache {
+  constructor() {
+    this._map = new Map();           // key -> WeakRef(value)
+    this._tokens = new Map();        // key -> unregister token (strong)
+    this._registry = new FinalizationRegistry((key) => {
+      // called after the value for `key` is GC'd
+      this._map.delete(key);
+      this._tokens.delete(key);
+    });
+  }
+
+  set(key, value) {
+    // unregister previous registration for this key (if any)
+    const prevToken = this._tokens.get(key);
+    if (prevToken) this._registry.unregister(prevToken);
+
+    const token = {}; // strong token per-key, doesn't reference value
+    this._tokens.set(key, token);
+    this._map.set(key, new WeakRef(value));
+    this._registry.register(value, key, token);
+  }
+
+  get(key) {
+    const ref = this._map.get(key);
+    if (!ref) return undefined;
+    const val = ref.deref();
+    if (val === undefined) { // value was GC'd
+      this._map.delete(key);
+      const token = this._tokens.get(key);
+      if (token) this._registry.unregister(token);
+      this._tokens.delete(key);
+    }
+    return val;
+  }
+}
+
+// Usage:
+// const cache = new WeakValueCache();
+// cache.set("big", { /* large object */ });
+// let v = cache.get("big"); // object or undefined if collected
+```
