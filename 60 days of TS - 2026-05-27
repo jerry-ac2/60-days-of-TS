@@ -1,0 +1,20 @@
+# TIL — Use structuredClone for reliable deep clones (and its caveats)
+
+structuredClone(obj) performs a deep clone of many built-in types (Date, RegExp, Map, Set, ArrayBuffer, typed arrays, etc.) and preserves circular references. It does not clone functions, DOM nodes, or non‑serializable internals (WeakMap/WeakSet), and can throw for some platform-specific objects.
+
+```js
+// deep clone (modern browsers / Node 17+)
+const original = { d: new Date(), m: new Map([['k', 1]]), arr: [1,2,3] };
+const copy = structuredClone(original);
+console.log(copy.d instanceof Date); // true
+console.log(copy.m.get('k')); // 1
+
+// lightweight fallback for plain JSON-safe objects
+function deepCloneFallback(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+```
+
+Notes:
+- Prefer structuredClone when available for correctness and performance.
+- If you need to clone functions or DOM nodes, design a serialization strategy or copy references explicitly.
