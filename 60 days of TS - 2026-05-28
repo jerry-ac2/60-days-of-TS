@@ -1,0 +1,30 @@
+// 2026-05-28 — Daily coding journal
+/**
+ * Recursively merges defaults into a target object without overwriting existing values.
+ *
+ * - Only plain objects are merged recursively. Arrays and other types are taken from target if present, otherwise from defaults.
+ * - Does not mutate the defaults; returns a new object combining target values and defaults.
+ *
+ * Example:
+ *   const a = { user: { name: "A" }, flags: [1] }
+ *   const d = { user: { name: "X", age: 30 }, flags: [0], theme: "dark" }
+ *   mergeDefaults(a, d) // => { user: { name: "A", age: 30 }, flags: [1], theme: "dark" }
+ */
+export function mergeDefaults<T>(target: Partial<T>, defaults: T): T {
+  const isPlainObject = (v: any): v is Record<string, any> =>
+    v !== null && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date);
+
+  const merge = (t: any, d: any): any => {
+    if (isPlainObject(d) && isPlainObject(t)) {
+      const out: Record<string, any> = { ...d };
+      for (const key of Object.keys(t)) {
+        out[key] = merge(t[key], d[key]);
+      }
+      return out;
+    }
+    // prefer target value if it's defined, otherwise defaults
+    return t === undefined ? d : t;
+  };
+
+  return merge(target as any, defaults as any) as T;
+}
